@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReliefLink</title>
+    <link rel="manifest" href="/manifest.json">
+    <script src="/config.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+      html, body, #app { height: 100%; }
+      #map { height: calc(100% - 112px); position: relative; z-index: 0; }
+      .leaflet-container { z-index: 0 !important; }
+      .pin-icon { width: 26px; height: 26px; border-radius: 9999px; display: grid; place-items: center; color: #0b0f19; font-weight: 700; font-size: 11px; border: 2px solid #0b0f19; box-shadow: 0 1px 6px rgba(0,0,0,.35); position: relative; }
+      .pin-badge { position: absolute; right: -6px; top: -6px; background: #111827; color: #e5e7eb; width: 16px; height: 16px; border-radius: 9999px; font-size: 10px; display: grid; place-items: center; border: 1px solid #374151; }
+      .pin-urgency { position:absolute; inset: -3px; border-radius:9999px; border:3px solid transparent; }
+      .pin-urg-1 { border-color:#eab308; }
+      .pin-urg-2 { border-color:#f59e0b; }
+      .pin-urg-3 { border-color:#ef4444; }
+      .legend { backdrop-filter: blur(4px); pointer-events: none; }
+    </style>
+  </head>
+  <body class="bg-gray-950 text-white">
+    <div id="app" x-data="reliefLinkApp()" x-init="init()" class="h-full flex flex-col">
+      <header class="p-3 flex items-center justify-between bg-gray-900 border-b border-gray-800">
+        <h1 class="text-lg font-semibold">Neighbors for Neighbors (Prototype #1)</h1>
+        <div class="flex gap-2">
+          <button @click="setRole('need')" :class="role==='need' ? 'bg-orange-500' : 'bg-gray-800'" class="px-3 py-1 rounded">I need help</button>
+          <button @click="setRole('help')" :class="role==='help' ? 'bg-teal-500' : 'bg-gray-800'" class="px-3 py-1 rounded">I want to help</button>
+        </div>
+      </header>
+      <div class="bg-red-900/40 text-red-200 text-center text-xs py-1">Not for emergencies. If you are in danger, call 911.</div>
+      <div class="px-3 py-2 bg-gray-900 border-b border-gray-800 flex items-center gap-2 flex-wrap">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-400">Layers:</span>
+          <button @click="toggle('needs')" :class="layers.needs ? 'bg-orange-600' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">Needs</button>
+          <button @click="toggle('offers')" :class="layers.offers ? 'bg-teal-600' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">Offers</button>
+          <button @click="toggle('shelters')" :class="layers.shelters ? 'bg-gray-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">Shelters</button>
+          <button @click="toggle('food')" :class="layers.food ? 'bg-gray-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">Food/Supply</button>
+          <button @click="toggle('feed311')" :class="layers.feed311 ? 'bg-blue-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">311</button>
+          <button @click="toggle('flood')" :class="layers.flood ? 'bg-indigo-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">Flood</button>
+        </div>
+        <div class="flex items-center gap-2 ml-auto">
+          <span class="text-xs text-gray-400">Radius (optional):</span>
+          <button @click="chooseRadius(5)" :class="radius===5 ? 'bg-gray-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">5 mi</button>
+          <button @click="chooseRadius(10)" :class="radius===10 ? 'bg-gray-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">10 mi</button>
+          <button @click="chooseRadius(20)" :class="radius===20 ? 'bg-gray-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">20 mi</button>
+          <button @click="chooseRadius(null)" class="px-2 py-1 rounded text-xs bg-gray-800">Clear</button>
+          <button @click="setCenterHere()" class="px-2 py-1 rounded text-xs bg-gray-800">Use view</button>
+          <button @click="resetCenter()" class="px-2 py-1 rounded text-xs bg-gray-800">Reset</button>
+        </div>
+      </div>
+      <div id="map"></div>
+      <!-- status chips -->
+      <div class="absolute left-3 bottom-24 z-[500] flex flex-col gap-1 legend">
+        <template x-if="statusShelters"><div class="text-[10px] bg-gray-900/90 border border-gray-800 px-2 py-1 rounded text-gray-300" x-text="statusShelters"></div></template>
+        <template x-if="statusFood"><div class="text-[10px] bg-gray-900/90 border border-gray-800 px-2 py-1 rounded text-gray-300" x-text="statusFood"></div></template>
+        <template x-if="status311"><div class="text-[10px] bg-gray-900/90 border border-gray-800 px-2 py-1 rounded text-gray-300" x-text="status311"></div></template>
+      </div>
+      <div x-show="!ui.picking" class="absolute right-3 bottom-24 z-[500] bg-gray-900/90 border border-gray-800 rounded p-2 text-[10px] space-y-1 legend">
+        <div class="font-semibold text-gray-300">Legend</div>
+        <div class="grid grid-cols-[auto,1fr] gap-x-2 gap-y-1 items-center">
+          <span x-html="sampleMarker('need','Food')"></span><span class="text-gray-300">Need (orange)</span>
+          <span x-html="sampleMarker('offer','Meals')"></span><span class="text-gray-300">Offer (teal)</span>
+        </div>
+        <div class="text-[9px] text-gray-400">Badge shows count of categories; thin ring shows urgency.</div>
+      </div>
+      <button x-show="!ui.picking" @click.stop="startCreate()" class="fixed bottom-5 right-5 bg-orange-600 hover:bg-orange-500 text-white rounded-full w-14 h-14 shadow-lg text-2xl z-[10000] pointer-events-auto" style="touch-action: manipulation;">+</button>
+      <!-- Top pick bar (mobile-friendly) -->
+      <div x-show="ui.picking" class="fixed top-0 left-0 right-0 z-[10000]">
+        <div class="m-3 p-3 rounded-xl border border-gray-800 bg-gray-900/95 shadow flex items-center gap-2">
+          <input x-model="addressQuery" @keydown.enter.prevent="geocodeAddress(true)" class="flex-1 px-2 py-2 rounded bg-gray-800 border border-gray-700 text-sm" placeholder="Search address" />
+          <button @click="geocodeAddress(true)" class="px-2 py-2 rounded bg-gray-800 text-sm">Search</button>
+        </div>
+      </div>
+      <div x-show="ui.createOpen && !ui.picking" class="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center" style="display:none">
+        <div class="bg-gray-900 w-full sm:w-[480px] rounded-t-2xl sm:rounded-xl border border-gray-800 p-4">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold">Create <span x-text="newPin.kind==='need' ? 'Need' : 'Offer'"></span></div>
+            <button class="text-gray-400" @click="cancelCreate()">✕</button>
+          </div>
+          <div class="mt-2 flex gap-2">
+            <button @click="newPin.kind='need'" :class="newPin.kind==='need'?'bg-orange-600':'bg-gray-800'" class="px-2 py-1 rounded text-xs">Need</button>
+            <button @click="newPin.kind='offer'" :class="newPin.kind==='offer'?'bg-teal-600':'bg-gray-800'" class="px-2 py-1 rounded text-xs">Offer</button>
+          </div>
+          <div class="text-xs text-gray-400 mt-1">Tap map to choose a spot, or use your location.</div>
+          <div class="mt-3 grid gap-3">
+            <div>
+              <label class="text-xs text-gray-400">Category</label>
+              <div class="flex flex-wrap gap-2 mt-1">
+                <template x-for="c in (newPin.kind==='need'? categories.need : categories.offer)" :key="c">
+                  <button @click="toggleCategory(c)" :class="newPin.categories.includes(c)?'bg-gray-700':'bg-gray-800'" class="px-2 py-1 rounded text-xs" x-text="c"></button>
+                </template>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-gray-400">Urgency</label>
+              <div class="flex gap-2 mt-1">
+                <button @click="newPin.urgency=1" :class="newPin.urgency===1?'bg-yellow-600':'bg-gray-800'" class="px-2 py-1 rounded text-xs">Low</button>
+                <button @click="newPin.urgency=2" :class="newPin.urgency===2?'bg-orange-600':'bg-gray-800'" class="px-2 py-1 rounded text-xs">Med</button>
+                <button @click="newPin.urgency=3" :class="newPin.urgency===3?'bg-red-600':'bg-gray-800'" class="px-2 py-1 rounded text-xs">High</button>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-gray-400">Title (optional)</label>
+              <input x-model="newPin.title" maxlength="80" class="w-full mt-1 px-2 py-2 rounded bg-gray-800 border border-gray-700" placeholder="Short title" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-400">Details</label>
+              <textarea x-model="newPin.body" maxlength="240" rows="3" class="w-full mt-1 px-2 py-2 rounded bg-gray-800 border border-gray-700" placeholder="What is needed / offered?"></textarea>
+              <div class="text-[10px] text-gray-500 mt-1" x-text="`${newPin.body.length}/240`"></div>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-xs text-gray-400" x-text="newPin.lat?`Lat ${newPin.lat.toFixed(4)}, Lng ${newPin.lng.toFixed(4)}`:'Set your location to continue'"></div>
+              <button @click="ui.picking=true; useMyLocation()" class="text-xs px-2 py-1 rounded bg-gray-800">Get my location</button>
+            </div>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <button @click="submitCreate()" class="flex-1 bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded disabled:opacity-50" :disabled="!canSubmitPin()">Post</button>
+            <button @click="cancelCreate()" class="flex-1 bg-gray-800 px-3 py-2 rounded">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <div x-show="ui.pinOpen" class="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center" style="display:none">
+        <div class="bg-gray-900 w-full sm:w-[520px] rounded-t-2xl sm:rounded-xl border border-gray-800 p-4 max-h-[90vh] overflow-y-auto">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold" x-text="selectedPin ? (selectedPin.kind==='need'?'Need':'Offer') : ''"></div>
+            <button class="text-gray-400" @click="closePin()">✕</button>
+          </div>
+          <template x-if="selectedPin">
+            <div class="mt-2">
+              <div class="flex flex-wrap gap-1">
+                <template x-for="c in (selectedPin.categories||[])" :key="c">
+                  <span class="text-[10px] px-2 py-0.5 rounded border" :style="badgeStyle(selectedPin.kind,c)" x-text="c"></span>
+                </template>
+              </div>
+              <div class="mt-1 font-semibold" x-text="selectedPin.title||''"></div>
+              <div class="text-sm text-gray-300 mt-1" x-text="selectedPin.body"></div>
+              <div class="text-xs text-gray-400 mt-1">
+                <span x-text="distanceText(selectedPin)"></span>
+                · <span x-text="ageText(selectedPin)"></span>
+              </div>
+              <div class="mt-3 flex gap-2">
+                <a :href="`https://www.google.com/maps?q=${selectedPin.lat},${selectedPin.lng}`" target="_blank" class="px-3 py-2 rounded bg-gray-800 text-xs">Open in Maps</a>
+                <button @click="reportSelected()" class="px-3 py-2 rounded bg-gray-800 text-xs">Report</button>
+                <template x-if="selectedPin && selectedPin.author_anon_id===anon">
+                  <button @click="dismissSelected()" class="px-3 py-2 rounded bg-red-600 text-xs text-white">Dismiss</button>
+                </template>
+              </div>
+            </div>
+          </template>
+          <div class="mt-4">
+            <div class="font-semibold text-sm">Comments</div>
+            <div class="mt-2 space-y-2">
+              <template x-for="c in comments" :key="c.id">
+                <div class="bg-gray-800 rounded p-2">
+                  <div class="text-xs text-gray-400" x-text="new Date(c.created_at).toLocaleString()"></div>
+                  <div class="text-sm" x-text="c.body"></div>
+                </div>
+              </template>
+            </div>
+            <div class="mt-3 flex gap-2">
+              <input x-model="commentBody" maxlength="200" class="flex-1 px-2 py-2 rounded bg-gray-800 border border-gray-700" placeholder="Add a comment" />
+              <button @click="submitComment()" class="px-3 py-2 rounded bg-teal-600 hover:bg-teal-500">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js');
+        });
+      }
+      function reliefLinkApp() {
+        return {
+          role: localStorage.getItem('rl_role') || 'help',
+          map: null,
+          anon: localStorage.getItem('rl_anon') || '',
+          center: [29.7604, -95.3698],
+          defaultCenter: [29.7604, -95.3698],
+          radius: null,
+          radiusCircle: null,
+          layers: { needs: true, offers: true, shelters: true, food: true, feed311: true, flood: false },
+          layerGroups: {},
+          intervals: [],
+          ui: { createOpen: false, pinOpen: false, picking: false },
+          newPin: { kind: 'need', categories: [], urgency: 2, title: '', body: '', lat: null, lng: null, marker: null },
+          categories: { need: ['Food','Shelter','Medical Aid','Transport','Supplies'], offer: ['Meals','Beds','Medical','Transport','Supplies'] },
+          userAccuracyCircle: null,
+          pickCtrl: null,
+          addressQuery: '',
+          floodLoaded: false,
+          selectedPin: null,
+          comments: [],
+          commentsTimer: null,
+          commentBody: '',
+          statusShelters: '',
+          statusFood: '',
+          status311: '',
+          colors: {
+            need: { 'Food':'#f97316','Shelter':'#fb923c','Medical Aid':'#ef4444','Transport':'#eab308','Supplies':'#f59e0b' },
+            offer:{ 'Meals':'#14b8a6','Beds':'#60a5fa','Medical':'#22c55e','Transport':'#06b6d4','Supplies':'#a78bfa' }
+          },
+          iconFor(kind, cat){
+            // simple inline SVGs for categories
+            const size = 14;
+            const base = `width=\"${size}\" height=\"${size}\" viewBox=\"0 0 24 24\" fill=\"currentColor\"`;
+            const map = {
+              need: {
+                'Food': `<svg ${base}><path d=\"M8 3v9a3 3 0 1 0 6 0V3h-2v9a1 1 0 1 1-2 0V3H8z\"/></svg>`,
+                'Shelter': `<svg ${base}><path d=\"M3 12l9-7 9 7v9h-6v-5H9v5H3z\"/></svg>`,
+                'Medical Aid': `<svg ${base}><path d=\"M10 3h4v6h6v4h-6v8h-4v-8H4V9h6z\"/></svg>`,
+                'Transport': `<svg ${base}><path d=\"M5 16l1-4 2-5h8l2 5 1 4H5zm2 3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm10 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z\"/></svg>`,
+                'Supplies': `<svg ${base}><path d=\"M3 7l9-4 9 4v10l-9 4-9-4V7zm9 2l-7-3v6l7 3 7-3V6l-7 3z\"/></svg>`
+              },
+              offer: {
+                'Meals': `<svg ${base}><path d=\"M4 4h2v8a3 3 0 1 1-2 0V4zm6 0h2v6h2V4h2v10h-2v6h-2v-6h-2V4z\"/></svg>`,
+                'Beds': `<svg ${base}><path d=\"M3 12V6h6a3 3 0 0 1 3 3v3h9v6h-2v-2H5v2H3v-12z\"/></svg>`,
+                'Medical': `<svg ${base}><path d=\"M10 3h4v6h6v4h-6v8h-4v-8H4V9h6z\"/></svg>`,
+                'Transport': `<svg ${base}><path d=\"M5 16l1-4 2-5h8l2 5 1 4H5zm2 3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm10 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z\"/></svg>`,
+                'Supplies': `<svg ${base}><path d=\"M3 7l9-4 9 4v10l-9 4-9-4V7zm9 2l-7-3v6l7 3 7-3V6l-7 3z\"/></svg>`
+              }
+            };
+            return (map[kind] && map[kind][cat]) || '';
+          },
+          markerHtml(kind, cats, urgency){
+            // two-color system: need vs offer
+            const baseColor = kind==='need' ? '#f97316' : '#14b8a6';
+            const primaryCat = (cats && cats[0]) || (kind==='need'?'Food':'Meals');
+            const icon = this.iconFor(kind, primaryCat);
+            const badge = (cats && cats.length>1) ? `<span class=\"pin-badge\">${cats.length}</span>` : '';
+            const urg = urgency ? `<span class=\"pin-urgency pin-urg-${urgency}\"></span>` : '';
+            return `<div class=\"pin-icon\" style=\"background:${baseColor}\">${icon}${badge}${urg}</div>`;
+          },
+          sampleMarker(kind, cat){ return this.markerHtml(kind, [cat], 2); },
+          setRole(r) {
+            this.role = r; localStorage.setItem('rl_role', r);
+            // auto-focus layers by role
+            if (r === 'help') { this.layers.needs = true; this.layers.offers = false; }
+            else { this.layers.needs = false; this.layers.offers = true; }
+            this.renderVisibility();
+            this.refreshPins();
+          },
+          init() {
+            this.ensureAnon();
+            this.initMap();
+            this.initLayers();
+            this.poll();
+            this.map.on('click', (e) => {
+              if (!this.ui.createOpen) return;
+              if (this.newPin.marker) { this.map.removeLayer(this.newPin.marker); this.newPin.marker = null; }
+              this.placeNewPin(e.latlng.lat, e.latlng.lng);
+            });
+          },
+          initMap() {
+            if (this.map) { this.map.remove(); this.map = null; }
+            this.map = L.map('map', { zoomAnimation: false }).setView(this.center, 12);
+            const maptilerKey = (window.__CONFIG__ && window.__CONFIG__.MAPTILER_KEY) || 'YOUR_MAPTILER_KEY';
+            L.tileLayer(`https://api.maptiler.com/maps/bright-v2/256/{z}/{x}/{y}.png?key=${maptilerKey}`, {
+              attribution: '&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+            }).addTo(this.map);
+            this.map.on('zoomstart', () => { try{ this.map.closePopup(); }catch(_){} });
+            this.map.on('moveend', () => { this.center=[this.map.getCenter().lat,this.map.getCenter().lng]; this.refreshPins(); });
+            this.map.on('zoomend', () => { this.refreshPins(); });
+          },
+          initLayers() {
+            this.layerGroups.needs = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnMaxZoom:true, maxClusterRadius: 50 }).addTo(this.map);
+            this.layerGroups.offers = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnMaxZoom:true, maxClusterRadius: 50 }).addTo(this.map);
+            this.layerGroups.shelters = L.layerGroup().addTo(this.map);
+            this.layerGroups.food = L.layerGroup().addTo(this.map);
+            this.layerGroups.feed311 = L.layerGroup().addTo(this.map);
+            this.layerGroups.flood = L.layerGroup();
+            this.refreshAll();
+          },
+          drawRadiusAt(center) {
+            if (!this.radius) return;
+            if (this.radiusCircle) this.map.removeLayer(this.radiusCircle);
+            this.radiusCircle = L.circle(center, { radius: this.radius * 1609.34, color: '#4b5563', weight: 2, fillOpacity: 0.03 }).addTo(this.map);
+          },
+          async chooseRadius(mi) {
+            if (!mi) { this.radius = null; if (this.radiusCircle) { this.map.removeLayer(this.radiusCircle); this.radiusCircle=null; } return; }
+            this.radius = mi;
+            // place circle at user's current location
+            if (!navigator.geolocation) { this.toast('Geolocation not available'); return; }
+            navigator.geolocation.getCurrentPosition(pos => {
+              const c = [pos.coords.latitude, pos.coords.longitude];
+              this.center = c;
+              this.map.setView(c, Math.max(this.map.getZoom(), 12));
+              this.drawRadiusAt(c);
+            }, _ => this.toast('Location failed'));
+          },
+          toggle(key) {
+            this.layers[key] = !this.layers[key];
+            if (key === 'flood') {
+              if (this.layers.flood) {
+                if (!this.floodLoaded) this.refreshFlood();
+                this.layerGroups.flood.addTo(this.map);
+              } else {
+                this.map.removeLayer(this.layerGroups.flood);
+              }
+              return;
+            }
+            this.renderVisibility();
+          },
+          renderVisibility() {
+            for (const k of ['needs','offers','shelters','food','feed311']) {
+              const grp = this.layerGroups[k];
+              if (!grp) continue;
+              if (this.layers[k]) grp.addTo(this.map); else this.map.removeLayer(grp);
+            }
+          },
+          locate() {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(pos => {
+              this.center = [pos.coords.latitude, pos.coords.longitude];
+              this.map.setView(this.center, 13);
+              if (this.radius) this.drawRadiusAt(this.center); else if (this.radiusCircle) { this.map.removeLayer(this.radiusCircle); this.radiusCircle=null; }
+              this.refreshAll();
+            });
+          },
+          setCenterHere(){
+            this.center=[this.map.getCenter().lat,this.map.getCenter().lng];
+            if (this.radius) this.drawRadiusAt(this.center); else if (this.radiusCircle) { this.map.removeLayer(this.radiusCircle); this.radiusCircle=null; }
+            this.refreshPins();
+          },
+          resetCenter(){
+            this.center=[...this.defaultCenter];
+            this.map.setView(this.center, 12);
+            if (this.radius) this.drawRadiusAt(this.center); else if (this.radiusCircle) { this.map.removeLayer(this.radiusCircle); this.radiusCircle=null; }
+            this.refreshAll();
+          },
+          poll() {
+            this.intervals.forEach(clearInterval);
+            this.intervals = [];
+            this.intervals.push(setInterval(() => this.refreshPins(), 25000));
+            this.intervals.push(setInterval(() => this.refresh311(), 30000));
+          },
+          refreshAll() { this.refreshPins(); this.refreshShelters(); this.refreshFood(); this.refresh311(); },
+          async refreshPins() {
+            const kinds = [this.layers.needs?'need':null, this.layers.offers?'offer':null].filter(Boolean).join(',');
+            const url = `/api/pins${kinds?`?kinds=${kinds}`:''}`;
+            try {
+              const res = await fetch(url);
+              const items = await res.json();
+              this.layerGroups.needs.clearLayers();
+              this.layerGroups.offers.clearLayers();
+              items.forEach(p => {
+                const html = this.markerHtml(p.kind, p.categories, p.urgency);
+                const icon = L.divIcon({ className: '', html });
+                const marker = L.marker([p.lat, p.lng], { icon });
+                marker.on('click', () => this.openPin(p));
+                if (p.kind === 'need') this.layerGroups.needs.addLayer(marker); else this.layerGroups.offers.addLayer(marker);
+              });
+              this.renderVisibility();
+            } catch (e) { this.toast('Failed to load pins'); }
+          },
+          ensureAnon() {
+            if (!this.anon) {
+              const rnd = Math.random().toString(16).slice(2,8);
+              this.anon = `${this.role==='help'?'helper':'seeker'}-${rnd}`;
+              localStorage.setItem('rl_anon', this.anon);
+            }
+          },
+          startCreate() {
+            const keepUrgency = this.newPin.urgency || 2;
+            this.newPin = { kind: (this.role==='need'?'need':'offer'), categories: [], urgency: keepUrgency, title: '', body: '', lat: null, lng: null, marker: null };
+            this.ui.createOpen = true;
+          },
+          cancelCreate() {
+            this.ui.createOpen = false;
+            this.ui.picking = false;
+            if (this.newPin.marker) { this.map.removeLayer(this.newPin.marker); this.newPin.marker = null; }
+            if (this.userAccuracyCircle) { this.map.removeLayer(this.userAccuracyCircle); this.userAccuracyCircle = null; }
+            if (this.pickCtrl) { this.map.removeLayer(this.pickCtrl); this.pickCtrl = null; }
+          },
+          toggleCategory(c) {
+            const i = this.newPin.categories.indexOf(c);
+            if (i>=0) this.newPin.categories.splice(i,1); else this.newPin.categories.push(c);
+          },
+          canSubmitPin() {
+            return this.newPin.categories.length>0 && this.newPin.body.trim().length>0 && this.newPin.lat && this.newPin.lng;
+          },
+          useMyLocation() {
+            if (!navigator.geolocation) { this.toast('Geolocation not available'); return; }
+            const opts = { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 };
+            navigator.geolocation.getCurrentPosition(pos => {
+              const { latitude, longitude, accuracy } = pos.coords;
+              this.ui.picking = true;
+              this.placeNewPin(latitude, longitude, true);
+              if (this.userAccuracyCircle) this.map.removeLayer(this.userAccuracyCircle);
+              this.userAccuracyCircle = L.circle([latitude, longitude], { radius: accuracy || 30, color: '#22c55e', fillOpacity: 0.05 }).addTo(this.map);
+            }, _ => this.toast('Location failed'), opts);
+          },
+          async geocodeAddress(enterPick=false){
+            const q = (this.addressQuery||'').trim(); if(!q) return;
+            const key = (window.__CONFIG__ && window.__CONFIG__.MAPTILER_KEY) || '';
+            const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=${key}&limit=1&language=en&country=US`;
+            try{ const res = await fetch(url); const data = await res.json(); if(data && data.features && data.features[0]){ const [lng,lat] = data.features[0].center; if(enterPick) this.ui.picking=true; this.placeNewPin(lat,lng,true); } else { this.toast('Address not found'); } } catch(_){ this.toast('Search failed'); }
+          },
+          placeNewPin(lat,lng,centerMap=false){
+            this.newPin.lat = lat; this.newPin.lng = lng;
+            if (this.newPin.marker) this.map.removeLayer(this.newPin.marker);
+            // main draggable marker
+            this.newPin.marker = L.marker([lat, lng], { draggable: true }).addTo(this.map);
+            this.newPin.marker.on('dragend', (ev)=>{ const p = ev.target.getLatLng(); this.newPin.lat = p.lat; this.newPin.lng = p.lng; if(this.pickCtrl) this.pickCtrl.setLatLng(p); });
+            // floating ✓ / ✕ controls next to marker (clean design)
+            if (this.pickCtrl) { this.map.removeLayer(this.pickCtrl); this.pickCtrl = null; }
+            const ctrl = L.divIcon({ className: 'rl-pick-ctrl', html: `<div class=\"rl-pick\"><button data-action=\"ok\" class=\"ok\" aria-label=\"Confirm location\">✓</button><button data-action=\"cancel\" class=\"cx\" aria-label=\"Cancel\">✕</button></div>`});
+            this.pickCtrl = L.marker([lat,lng], { icon: ctrl, interactive: true, keyboard: false, opacity: 1 }).addTo(this.map);
+            this.pickCtrl.on('click', (e)=>{
+              const t = e.originalEvent.target; const act = t && t.getAttribute && t.getAttribute('data-action');
+              if (act === 'ok') { this.confirmPick(); }
+              if (act === 'cancel') { this.cancelCreate(); }
+            });
+            if (centerMap) { this.map.setView([lat, lng], Math.max(14,this.map.getZoom())); }
+          },
+          confirmPick(){ this.ui.picking=false; if(this.pickCtrl){ this.map.removeLayer(this.pickCtrl); this.pickCtrl=null; } },
+          async submitCreate() {
+            if (!this.canSubmitPin()) return;
+            const payload = { kind: this.newPin.kind, categories: this.newPin.categories, urgency: this.newPin.urgency, title: this.newPin.title || null, body: this.newPin.body, lat: this.newPin.lat, lng: this.newPin.lng, author_anon_id: this.anon };
+            const res = await fetch('/api/pins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (res.ok) {
+              this.cancelCreate();
+              this.refreshPins();
+              this.toast('Posted');
+            } else { this.toast('Failed to post'); }
+          },
+          openPin(pin) {
+            this.selectedPin = pin;
+            this.ui.pinOpen = true;
+            this.loadComments();
+            if (this.commentsTimer) clearInterval(this.commentsTimer);
+            this.commentsTimer = setInterval(() => this.loadComments(), 10000);
+          },
+          closePin() {
+            this.ui.pinOpen = false; this.selectedPin = null; this.comments = []; this.commentBody='';
+            if (this.commentsTimer) clearInterval(this.commentsTimer);
+          },
+          async loadComments() {
+            if (!this.selectedPin) return;
+            const res = await fetch(`/api/pins/${this.selectedPin.id}/comments`);
+            if (res.ok) this.comments = await res.json(); else this.toast('Failed to load comments');
+          },
+          async submitComment() {
+            if (!this.selectedPin || !this.commentBody.trim()) return;
+            const res = await fetch(`/api/pins/${this.selectedPin.id}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: this.commentBody, author_anon_id: this.anon }) });
+            if (res.ok) {
+              this.commentBody = '';
+              await this.loadComments();
+            } else { this.toast('Failed to send'); }
+          },
+          async dismissSelected(){ if(!this.selectedPin) return; const q = new URLSearchParams({author_anon_id:this.anon}).toString(); const res = await fetch(`/api/pins/${this.selectedPin.id}/dismiss?${q}`,{method:'POST'}); if(res.ok){ this.toast('Dismissed'); this.closePin(); this.refreshPins(); } else { this.toast('Not allowed'); } },
+          async refreshShelters() {
+            try {
+              const res = await fetch('/api/shelters');
+              const items = await res.json();
+              this.layerGroups.shelters.clearLayers();
+              items.forEach(shel => {
+                const icon = L.icon({ iconUrl: '/static/icons/shelter.svg', iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -24], className: 'verified-shelter' });
+                const m = L.marker([shel.lat, shel.lng], { icon });
+                const badge = `<span class='inline-flex items-center gap-1 text-[10px] text-emerald-300'>Verified</span>`;
+                m.bindPopup(`<div class='text-sm'><div class='font-semibold'>${shel.name}</div><div class='text-xs text-gray-400'>${badge} · ${shel.type||'official'}</div><div>${shel.capacity||''}</div></div>`);
+                m.addTo(this.layerGroups.shelters);
+              });
+              this.renderVisibility();
+              const latest = items.reduce((acc, x) => Math.max(acc, Date.parse(x.last_updated||0)||0), 0);
+              if (latest) this.statusShelters = `Shelters · updated ${this.timeAgo(latest)} ago`;
+            } catch (e) { /* noop */ }
+          },
+          async refreshFood() {
+            try {
+              const res = await fetch('/api/food');
+              const items = await res.json();
+              this.layerGroups.food.clearLayers();
+              items.forEach(s => { const m = L.marker([s.lat, s.lng]); m.bindPopup(`<div class='text-sm'><div class='font-semibold'>${s.name}</div><div class='text-xs text-gray-400'>${s.kind} · ${s.status||''}</div><div>${s.needs||''}</div></div>`); this.layerGroups.food.addLayer(m); });
+              this.renderVisibility();
+              const latest = items.reduce((acc, x) => Math.max(acc, Date.parse(x.last_updated||0)||0), 0);
+              if (latest) this.statusFood = `Food/Supply · updated ${this.timeAgo(latest)} ago`;
+            } catch (e) { /* noop */ }
+          },
+          async refresh311() {
+            try {
+              const res = await fetch('/api/311');
+              const geo = await res.json();
+              this.layerGroups.feed311.clearLayers();
+              if (geo && geo.features) {
+                geo.features.forEach(f => { const [lng, lat] = f.geometry.coordinates; const m = L.circleMarker([lat, lng], { radius: 4, color: '#3b82f6', fillOpacity: 0.8 }); m.bindPopup(`<div class='text-sm'><div class='font-semibold'>311: ${f.properties.category||''}</div><div class='text-xs text-gray-400'>${f.properties.updated? new Date(f.properties.updated).toLocaleString() : ''}</div></div>`); m.addTo(this.layerGroups.feed311); });
+                const latest = geo.features.reduce((acc, f) => Math.max(acc, Date.parse(f.properties.updated||0)||0), 0);
+                if (latest) this.status311 = `311 · updated ${this.timeAgo(latest)} ago`;
+              }
+              this.renderVisibility();
+            } catch (e) { this.toast('311 unavailable'); }
+          },
+          async refreshFlood(){
+            try{
+              // ArcGIS FeatureServer → GeoJSON (reproject to WGS84)
+              const base = 'https://services.arcgis.com/NummVBqZSIJKUeVR/arcgis/rest/services/FEMA_Flood_Plains/FeatureServer/0/query';
+              const qs = new URLSearchParams({ where: '1=1', outFields: 'FLOOD', f: 'geojson', outSR: '4326' }).toString();
+              const url = `${base}?${qs}`;
+              const res = await fetch(url);
+              const geo = await res.json();
+              const style = f => {
+                const v = (f.properties && f.properties.FLOOD) || '';
+                if (v === 'FLOODWAY') return { color:'#1d4ed8', weight:1, fillColor:'#1e40af', fillOpacity:0.25 };
+                if (v.startsWith('100-year')) return { color:'#3b82f6', weight:1, fillColor:'#60a5fa', fillOpacity:0.22 };
+                if (v.startsWith('500-year')) return { color:'#22d3ee', weight:1, fillColor:'#67e8f9', fillOpacity:0.18 };
+                return { color:'#64748b', weight:1, fillColor:'#94a3b8', fillOpacity:0.12 };
+              };
+              const layer = L.geoJSON(geo, { style });
+              this.layerGroups.flood.clearLayers();
+              layer.addTo(this.layerGroups.flood);
+              this.floodLoaded = true;
+              if (this.layers.flood) this.layerGroups.flood.addTo(this.map);
+            } catch(e){ this.toast('Flood layer unavailable'); }
+          },
+          // helpers
+          timeAgo(ts){ const d=Date.now()-ts; const m=Math.floor(d/60000); if(m<1) return 'just now'; if(m<60) return `${m}m`; const h=Math.floor(m/60); if(h<24) return `${h}h`; const days=Math.floor(h/24); return `${days}d`; },
+          distMi(a,b,c,d){ const R=3958.8; const toRad=x=>x*Math.PI/180; const p1=toRad(a), p2=toRad(c); const dphi=toRad(c-a), dl=toRad(d-b); const x=Math.sin(dphi/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2; return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)); },
+          distanceText(p){ const d = this.distMi(this.center[0], this.center[1], p.lat, p.lng); return `${d.toFixed(1)} mi`; },
+          ageText(p){ if(!p.created_at) return ''; const ts = Date.parse(p.created_at); return this.timeAgo(ts)+' ago'; },
+          badgeStyle(kind,c){ const color = (this.colors[kind] && this.colors[kind][c]) || '#4b5563'; return `border-color:${color}; color:${color}`; },
+          async reportSelected(){ if(!this.selectedPin) return; await fetch(`/api/pins/${this.selectedPin.id}/report`,{method:'POST'}); this.toast('Reported'); this.closePin(); this.refreshPins(); },
+          toast(msg){ const el=document.createElement('div'); el.className='fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-gray-100 border border-gray-700 px-3 py-2 rounded text-sm z-[1000]'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),2000); },
+        }
+      }
+      document.addEventListener('alpine:init', () => {
+        Alpine.data('reliefLinkApp', reliefLinkApp);
+      });
+    </script>
+    <style>
+      .rl-pick { display:flex; gap:8px; align-items:center; background:transparent; }
+      .rl-pick .ok, .rl-pick .cx { width:34px; height:34px; border-radius:9999px; display:inline-flex; align-items:center; justify-content:center; font-weight:600; box-shadow:0 4px 10px rgba(0,0,0,.25); }
+      .rl-pick .ok { background:#10b981; color:white; border:none; }
+      .rl-pick .cx { background:#334155; color:#e2e8f0; border:1px solid #1f2937; }
+      .rl-pick-ctrl .leaflet-marker-icon { background:transparent; border:none; transform: translate(8px, -6px); }
+    </style>
+  </body>
+  </html>
+
+

@@ -1,0 +1,15 @@
+[service]
+name = "relieflink"
+
+[build]
+builder = "NIXPACKS"
+
+[env]
+PYTHONUNBUFFERED = "1"
+PORT = "8000"
+
+[nixpacks]
+providers = ["python"]
+install = ["pip install -r requirements.txt"]
+start = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+

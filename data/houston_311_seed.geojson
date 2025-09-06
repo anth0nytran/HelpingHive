@@ -1,0 +1,6 @@
+{"type":"FeatureCollection","features":[
+ {"type":"Feature","properties":{"category":"Flooding","updated":"2025-09-06T00:00:00Z"},"geometry":{"type":"Point","coordinates":[-95.3698,29.7604]}},
+ {"type":"Feature","properties":{"category":"Debris","updated":"2025-09-06T00:00:00Z"},"geometry":{"type":"Point","coordinates":[-95.3813,29.7359]}}
+]}
+
+

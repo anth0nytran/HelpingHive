@@ -1,0 +1,6 @@
+[
+  {"id":"food-1","name":"Free Meals — Third Ward","kind":"free_food","lat":29.7265,"lng":-95.3569,"status":"open","needs":"bottled water","source":"community","last_updated":"2025-09-06T00:00:00Z"},
+  {"id":"food-2","name":"Drop-off — Heights HS","kind":"drop_off","lat":29.7898,"lng":-95.3894,"status":"open","needs":"diapers, blankets","source":"official","last_updated":"2025-09-06T00:00:00Z"}
+]
+
+
