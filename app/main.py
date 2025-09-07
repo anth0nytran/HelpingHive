@@ -10,6 +10,7 @@ from . import config  # noqa: F401  # ensure .env is loaded early
 from .routes_pins import router as pins_router
 from .routes_refdata import router as refdata_router
 from .routes_feeds import router as feeds_router
+from .routes_ai import router as ai_router
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,6 +22,7 @@ app = FastAPI(title="ReliefLink API", version="0.1.0")
 app.include_router(pins_router)
 app.include_router(refdata_router)
 app.include_router(feeds_router)
+app.include_router(ai_router)
 
 
 @app.get("/healthz")
@@ -43,6 +45,11 @@ def service_worker() -> FileResponse:
     return FileResponse(WEB_DIR / "sw.js")
 
 
+@app.get("/favicon.ico")
+def favicon() -> FileResponse:
+    return FileResponse(WEB_DIR / "static" / "icons" / "icon.svg", media_type="image/svg+xml")
+
+
 @app.get("/config.js")
 def config_js() -> Response:
     import os
@@ -50,6 +57,9 @@ def config_js() -> Response:
         "MAPTILER_KEY": os.getenv("MAPTILER_KEY", ""),
         "HOUSTON_311_URL": os.getenv("HOUSTON_311_URL", ""),
         "FLOOD_WMS_URL": os.getenv("FLOOD_WMS_URL", ""),
+        "FLOOD_WMS_LAYERS": os.getenv("FLOOD_WMS_LAYERS", "0"),
+        "FLOOD_ARCGIS_URL": os.getenv("FLOOD_ARCGIS_URL", ""),
+        "FLOOD_ARCGIS_LAYERS": os.getenv("FLOOD_ARCGIS_LAYERS", "0,1,6,7,8,9,10"),
     }
     body = "window.__CONFIG__ = " + __import__("json").dumps(cfg) + ";"
     return Response(content=body, media_type="application/javascript")

@@ -2,6 +2,7 @@ import json
 import os
 import time
 from pathlib import Path
+import csv
 from typing import List, Any, Dict
 
 import httpx
@@ -14,6 +15,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 SHELTERS_FILE = DATA_DIR / "shelters.json"
 FOOD_FILE = DATA_DIR / "food_supply_sites.json"
+DOCS_DIR = BASE_DIR / "docs"
+PANTRIES_CSV = DOCS_DIR / "Hou_Pantries.csv"
 
 
 def _read_json(path: Path):
@@ -77,6 +80,51 @@ def _std_food(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _read_pantries_csv() -> List[Dict[str, Any]]:
+    results: List[Dict[str, Any]] = []
+    if not PANTRIES_CSV.exists():
+        return results
+    try:
+        with PANTRIES_CSV.open("r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if not row or len(row) < 3:
+                    continue
+                # Heuristic: last two numeric fields are lat,lng
+                lat = None
+                lng = None
+                for i in range(len(row) - 1, -1, -1):
+                    try:
+                        val = float(row[i])
+                        if lng is None:
+                            lng = val
+                        elif lat is None:
+                            lat = val
+                            break
+                    except Exception:
+                        continue
+                if lat is None or lng is None:
+                    continue
+                name = row[0].strip()
+                address = row[1].strip() if len(row) > 1 else ""
+                website = row[2].strip() if len(row) > 2 else ""
+                results.append({
+                    "id": None,
+                    "name": name,
+                    "kind": "free_food",
+                    "lat": float(lat),
+                    "lng": float(lng),
+                    "status": None,
+                    "needs": address,
+                    "website": website,
+                    "source": "official",
+                    "last_updated": None,
+                })
+    except Exception:
+        return results
+    return results
+
+
 @router.get("/shelters")
 async def list_shelters():
     remote_url = os.getenv("SHELTERS_URL")
@@ -114,10 +162,13 @@ async def list_food_sites():
             except Exception:
                 _cache["f"] = []
         results.extend(_cache["f"])  
+    # Local JSON
     try:
         results.extend(_read_json(FOOD_FILE))
     except HTTPException:
         pass
+    # CSV pantries
+    results.extend(_read_pantries_csv())
     return results
 
 

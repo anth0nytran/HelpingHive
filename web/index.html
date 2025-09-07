@@ -11,19 +11,29 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/esri-leaflet@3.0.11/dist/esri-leaflet.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
       html, body, #app { height: 100%; }
       #map { height: calc(100% - 112px); position: relative; z-index: 0; }
       .leaflet-container { z-index: 0 !important; }
-      .pin-icon { width: 26px; height: 26px; border-radius: 9999px; display: grid; place-items: center; color: #0b0f19; font-weight: 700; font-size: 11px; border: 2px solid #0b0f19; box-shadow: 0 1px 6px rgba(0,0,0,.35); position: relative; }
+      .pin-icon { width: 24px; height: 24px; border-radius: 9999px; display: grid; place-items: center; color: #0b0f19; font-weight: 700; font-size: 11px; border: 1px solid #0b0f19; box-shadow: 0 1px 3px rgba(0,0,0,.25); position: relative; }
       .pin-badge { position: absolute; right: -6px; top: -6px; background: #111827; color: #e5e7eb; width: 16px; height: 16px; border-radius: 9999px; font-size: 10px; display: grid; place-items: center; border: 1px solid #374151; }
       .pin-urgency { position:absolute; inset: -3px; border-radius:9999px; border:3px solid transparent; }
       .pin-urg-1 { border-color:#eab308; }
       .pin-urg-2 { border-color:#f59e0b; }
       .pin-urg-3 { border-color:#ef4444; }
       .legend { backdrop-filter: blur(4px); pointer-events: none; }
+      /* Clean popup typography */
+      .leaflet-popup-content { margin: 8px 10px; line-height: 1.25; }
+      .rlp { max-width: 260px; }
+      .rlp-title { font-weight: 600; margin-bottom: 2px; }
+      .rlp-sub { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+      .rlp-body { font-size: 13px; color: #e5e7eb; }
+      .rlp-links a { color: #60a5fa; text-decoration: underline; }
+      /* Highlight marker visuals */
+      .pin-highlight { box-shadow: 0 0 0 4px rgba(59,130,246,.6) !important; border-color: #60a5fa !important; }
     </style>
   </head>
   <body class="bg-gray-950 text-white">
@@ -47,6 +57,8 @@
           <button @click="toggle('flood')" :class="layers.flood ? 'bg-indigo-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">Flood</button>
         </div>
         <div class="flex items-center gap-2 ml-auto">
+          <input x-model="qaQ" @keydown.enter.prevent="askQa()" class="px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs w-40" placeholder="Ask the map" />
+          <button @click="askQa()" class="px-2 py-1 rounded text-xs bg-gray-800">Ask</button>
           <span class="text-xs text-gray-400">Radius (optional):</span>
           <button @click="chooseRadius(5)" :class="radius===5 ? 'bg-gray-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">5 mi</button>
           <button @click="chooseRadius(10)" :class="radius===10 ? 'bg-gray-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">10 mi</button>
@@ -56,6 +68,7 @@
           <button @click="resetCenter()" class="px-2 py-1 rounded text-xs bg-gray-800">Reset</button>
         </div>
       </div>
+      
       <div id="map"></div>
       <!-- status chips -->
       <div class="absolute left-3 bottom-24 z-[500] flex flex-col gap-1 legend">
@@ -192,13 +205,25 @@
           layers: { needs: true, offers: true, shelters: true, food: true, feed311: true, flood: false },
           layerGroups: {},
           intervals: [],
-          ui: { createOpen: false, pinOpen: false, picking: false },
+          ui: { createOpen: false, pinOpen: false, picking: false, floodConfig: false },
           newPin: { kind: 'need', categories: [], urgency: 2, title: '', body: '', lat: null, lng: null, marker: null },
           categories: { need: ['Food','Shelter','Medical Aid','Transport','Supplies'], offer: ['Meals','Beds','Medical','Transport','Supplies'] },
           userAccuracyCircle: null,
           pickCtrl: null,
           addressQuery: '',
+          qaQ: '',
           floodLoaded: false,
+          // Prefer ArcGIS MapServer if configured; else WMS proxy if configured; else GeoJSON fallback
+          floodArcgisUrl: (window.__CONFIG__ && window.__CONFIG__.FLOOD_ARCGIS_URL) || '',
+          floodArcgisLayersStr: (window.__CONFIG__ && window.__CONFIG__.FLOOD_ARCGIS_LAYERS) || '0',
+          floodWmsUrl: (window.__CONFIG__ && window.__CONFIG__.FLOOD_WMS_URL) ? '/api/flood/wms' : '',
+          floodWmsLayers: (window.__CONFIG__ && window.__CONFIG__.FLOOD_WMS_LAYERS) || '0',
+          floodWmsLayer: null,
+          floodArcgisLayer: null,
+          floodArcgisCatalog: [],
+          floodArcgisSelected: [],
+          isNavigating: false,
+          navTimer: null,
           selectedPin: null,
           comments: [],
           commentsTimer: null,
@@ -263,23 +288,90 @@
           },
           initMap() {
             if (this.map) { this.map.remove(); this.map = null; }
-            this.map = L.map('map', { zoomAnimation: false }).setView(this.center, 12);
+            this.map = L.map('map', { zoomAnimation: false, fadeAnimation: false, preferCanvas: true }).setView(this.center, 12);
             const maptilerKey = (window.__CONFIG__ && window.__CONFIG__.MAPTILER_KEY) || 'YOUR_MAPTILER_KEY';
             L.tileLayer(`https://api.maptiler.com/maps/bright-v2/256/{z}/{x}/{y}.png?key=${maptilerKey}`, {
               attribution: '&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
             }).addTo(this.map);
+            // Dedicated pane for flood overlay to isolate transforms
+            if (!this.map.getPane('floodPane')) {
+              this.map.createPane('floodPane');
+              this.map.getPane('floodPane').style.zIndex = 350;
+              this.map.getPane('floodPane').style.pointerEvents = 'none';
+            }
             this.map.on('zoomstart', () => { try{ this.map.closePopup(); }catch(_){} });
-            this.map.on('moveend', () => { this.center=[this.map.getCenter().lat,this.map.getCenter().lng]; this.refreshPins(); });
-            this.map.on('zoomend', () => { this.refreshPins(); });
+            // Debounce heavy layers while navigating to prevent jitter
+            this.map.on('movestart', () => { this.pauseDuringNavigate(); });
+            this.map.on('zoomstart', () => { this.pauseDuringNavigate(); });
+            this.map.on('moveend', () => { this.center=[this.map.getCenter().lat,this.map.getCenter().lng]; this.resumeAfterNavigate(); this.refreshPins(); this.scheduleFloodVector(); });
+            this.map.on('zoomend', () => { this.resumeAfterNavigate(); this.scheduleFloodVector(); });
           },
           initLayers() {
-            this.layerGroups.needs = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnMaxZoom:true, maxClusterRadius: 50 }).addTo(this.map);
-            this.layerGroups.offers = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnMaxZoom:true, maxClusterRadius: 50 }).addTo(this.map);
+            const clusterOpts = { showCoverageOnHover:false, spiderfyOnMaxZoom:true, maxClusterRadius: 50, chunkedLoading: true, chunkDelay: 20, chunkInterval: 50 };
+            this.layerGroups.needs = L.markerClusterGroup(clusterOpts).addTo(this.map);
+            this.layerGroups.offers = L.markerClusterGroup(clusterOpts).addTo(this.map);
             this.layerGroups.shelters = L.layerGroup().addTo(this.map);
             this.layerGroups.food = L.layerGroup().addTo(this.map);
             this.layerGroups.feed311 = L.layerGroup().addTo(this.map);
-            this.layerGroups.flood = L.layerGroup();
+            // Prefer ArcGIS dynamic (user reported WMS issues); fallback to WMS
+            if (this.floodArcgisUrl && L.esri) {
+              this.initArcgisFlood();
+            } else if (this.floodWmsUrl) {
+              this.floodWmsLayer = L.tileLayer.wms(this.floodWmsUrl, { layers: this.floodWmsLayers, format: 'image/png8', transparent: true, opacity: 0.25, crossOrigin: true, tiled: true, tileSize: 256, detectRetina: false, updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 0, uppercase: true, version: '1.3.0', pane: 'floodPane' });
+              if (this.layers.flood) this.floodWmsLayer.addTo(this.map);
+            } else {
+              this.layerGroups.flood = L.layerGroup();
+            }
             this.refreshAll();
+          },
+          pauseDuringNavigate(){
+            this.isNavigating = true;
+            // Hide flood overlay instead of removing to avoid RasterLayer null errors
+            try { if (this.floodArcgisLayer) this.floodArcgisLayer.setOpacity(0); } catch(_){}
+            try { if (this.floodWmsLayer) this.floodWmsLayer.setOpacity(0); } catch(_){}
+          },
+          resumeAfterNavigate(){
+            clearTimeout(this.navTimer);
+            this.navTimer = setTimeout(() => {
+              this.isNavigating = false;
+              if (this.layers.flood) {
+                if (this.floodArcgisLayer) { try { this.floodArcgisLayer.setOpacity(0.25); this.floodArcgisLayer.redraw && this.floodArcgisLayer.redraw(); } catch(_){} }
+                if (this.floodWmsLayer) { try { this.floodWmsLayer.setOpacity(0.25); this.floodWmsLayer.redraw && this.floodWmsLayer.redraw(); } catch(_){} }
+              }
+            }, 150);
+          },
+          // After map settles, briefly delay vector addition so marker layers render first
+          scheduleFloodVector(){
+            if (!this.layers.flood) return;
+            clearTimeout(this._floodTimer);
+            this._floodTimer = setTimeout(()=>{
+              if (this.floodArcgisLayer && !this.map.hasLayer(this.floodArcgisLayer)) {
+                try { this.floodArcgisLayer.addTo(this.map); } catch(_){}
+              }
+              if (!this.floodArcgisLayer && this.floodWmsLayer && !this.map.hasLayer(this.floodWmsLayer)) {
+                try { this.floodWmsLayer.addTo(this.map); } catch(_){}
+              }
+            }, 80);
+          },
+          parseLayers(str){ return (str||'').split(',').map(s=>parseInt(s.trim(),10)).filter(n=>Number.isFinite(n)); },
+          async initArcgisFlood(){
+            try{
+              const res = await fetch(`${this.floodArcgisUrl}/layers?f=json`);
+              const data = await res.json();
+              const layers = (data && (data.layers||data.subLayers||[])) || [];
+              this.floodArcgisCatalog = layers.map(l=>({ id: l.id, name: l.name||'', defaultVisibility: !!l.defaultVisibility }));
+              const preset = this.parseLayers(this.floodArcgisLayersStr);
+              const harrisOnly = this.floodArcgisCatalog.filter(l=>/harris/i.test(l.name)).map(l=>l.id);
+              this.floodArcgisSelected = (preset.length? preset : (harrisOnly.length? harrisOnly : this.floodArcgisCatalog.filter(l=>l.defaultVisibility).map(l=>l.id)));
+            } catch(_){ this.floodArcgisCatalog = []; this.floodArcgisSelected = this.parseLayers(this.floodArcgisLayersStr); }
+            this.floodArcgisLayer = L.esri.dynamicMapLayer({ url: this.floodArcgisUrl, layers: this.floodArcgisSelected, opacity: 0.25, f: 'image', format: 'png8', pane: 'floodPane', updateInterval: 200 });
+            if (this.layers.flood && !this.isNavigating && this.floodArcgisSelected.length) { this.floodArcgisLayer.addTo(this.map); }
+          },
+          updateFloodArcgis(){
+            if (!this.floodArcgisLayer) return;
+            this.floodArcgisLayer.setLayers(this.floodArcgisSelected);
+            if (this.floodArcgisSelected.length && this.layers.flood) { this.floodArcgisLayer.addTo(this.map); }
+            else { this.map.removeLayer(this.floodArcgisLayer); }
           },
           drawRadiusAt(center) {
             if (!this.radius) return;
@@ -298,14 +390,24 @@
               this.drawRadiusAt(c);
             }, _ => this.toast('Location failed'));
           },
-          toggle(key) {
+          async toggle(key) {
             this.layers[key] = !this.layers[key];
             if (key === 'flood') {
-              if (this.layers.flood) {
-                if (!this.floodLoaded) this.refreshFlood();
-                this.layerGroups.flood.addTo(this.map);
+              // Ensure ArcGIS layer exists if configured
+              if (!this.floodArcgisLayer && this.floodArcgisUrl && window.L && L.esri) {
+                await this.initArcgisFlood();
+              }
+              if (this.floodArcgisLayer) {
+                if (this.layers.flood && !this.isNavigating && this.floodArcgisSelected.length) this.floodArcgisLayer.addTo(this.map); else this.map.removeLayer(this.floodArcgisLayer);
+              } else if (this.floodWmsLayer) {
+                if (this.layers.flood) this.floodWmsLayer.addTo(this.map); else this.map.removeLayer(this.floodWmsLayer);
               } else {
-                this.map.removeLayer(this.layerGroups.flood);
+                if (this.layers.flood) {
+                  if (!this.floodLoaded) this.refreshFlood();
+                  this.layerGroups.flood.addTo(this.map);
+                } else {
+                  this.map.removeLayer(this.layerGroups.flood);
+                }
               }
               return;
             }
@@ -345,6 +447,130 @@
             this.intervals.push(setInterval(() => this.refresh311(), 30000));
           },
           refreshAll() { this.refreshPins(); this.refreshShelters(); this.refreshFood(); this.refresh311(); },
+          async askQa(){
+            const q = (this.qaQ||'').trim(); if(!q) return;
+            const body = { question: q, center: this.center, radius_mi: this.radius || 5 };
+            try{
+              const res = await fetch('/api/assist/qna', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+              const data = await res.json();
+              if (data && data.ask) { this.toast(data.ask); }
+              else if (data && data.answer) {
+                const isFallback = data.mode==='fallback';
+                const prefix = isFallback ? '[Summary] ' : '';
+                if (data.ui && data.ui.items) {
+                  this.toastRich({ title: data.ui.title||'Answer', subtitle: prefix + (data.ui.subtitle||''), items: data.ui.items });
+                } else {
+                  this.toast(prefix + data.answer);
+                }
+                if (isFallback && data.reason) {
+                  console.warn('Assist fallback reason:', data.reason);
+                  this.toast(`[Reason] ${data.reason}`);
+                }
+              }
+              else { this.toast('No answer'); }
+            } catch(_){ this.toast('Assist unavailable'); }
+          },
+          focusOnItem(item){
+            if (!item) return;
+            this.removeHighlights();
+            this.addHighlightForItem(item);
+            if (item.type === 'pin' && item.id && this._pinMarkers && this._pinMarkers.has(item.id)) {
+              const m = this._pinMarkers.get(item.id);
+              const latlng = m.getLatLng();
+              this.map.flyTo(latlng, Math.max(15, this.map.getZoom()));
+              return;
+            }
+            if (item.lat && item.lng) {
+              this.map.flyTo([item.lat, item.lng], Math.max(14, this.map.getZoom()));
+            }
+          },
+          addHighlightForItem(item){
+            this._activeHighlights = this._activeHighlights || [];
+            if (item && item.type === 'pin' && item.id && this._pinMarkers && this._pinMarkers.has(item.id)) {
+              const marker = this._pinMarkers.get(item.id);
+              try { marker.setZIndexOffset(1000); } catch(_){ }
+              const el = marker._icon; if (el) el.classList.add('pin-highlight');
+              this._activeHighlights.push({ kind:'marker', marker });
+              return;
+            }
+            if (item && item.lat && item.lng) {
+              const ring = L.circleMarker([item.lat, item.lng], { radius: 16, color: '#60a5fa', weight: 2, fillColor: '#93c5fd', fillOpacity: 0.15 });
+              ring.addTo(this.map);
+              this._activeHighlights.push({ kind:'layer', layer: ring });
+            }
+          },
+          removeHighlights(){
+            if (!this._activeHighlights || !this._activeHighlights.length) return;
+            this._activeHighlights.forEach(h => {
+              if (h.kind==='marker' && h.marker) {
+                try { h.marker.setZIndexOffset(0); } catch(_){ }
+                const el = h.marker._icon; if (el) el.classList.remove('pin-highlight');
+              }
+              if (h.kind==='layer' && h.layer) {
+                try { this.map.removeLayer(h.layer); } catch(_){ }
+              }
+            });
+            this._activeHighlights = [];
+          },
+          toastRich(payload){
+            const { title, subtitle, items } = payload || {};
+            let root = document.getElementById('toast-root');
+            if (!root) {
+              root = document.createElement('div');
+              root.id = 'toast-root';
+              root.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 z-[1000] grid gap-2 w-[90%] max-w-[520px]';
+              document.body.appendChild(root);
+            }
+            const el = document.createElement('div');
+            el.className = 'bg-gray-900/95 text-gray-100 border border-gray-700 px-3 py-2 rounded text-sm shadow';
+            const row = document.createElement('div');
+            row.className = 'flex items-start justify-between gap-3';
+            const text = document.createElement('div');
+            text.className = 'pr-2 w-full';
+            const h = document.createElement('div'); h.className = 'font-semibold'; h.textContent = title || 'Answer';
+            const sub = document.createElement('div'); sub.className = 'text-xs text-gray-400'; sub.textContent = subtitle || '';
+            const ul = document.createElement('ul'); ul.className = 'mt-1 space-y-1';
+            try { this.removeHighlights(); (items||[]).slice(0,3).forEach(it => this.addHighlightForItem(it)); } catch(_){ }
+            (items||[]).forEach(it => {
+              const li = document.createElement('li'); li.className='flex items-center gap-2';
+              const dot = document.createElement('span'); dot.className='w-1.5 h-1.5 rounded-full bg-gray-500 inline-block';
+              const link = document.createElement('button'); link.className='text-left underline text-blue-300 hover:text-blue-200';
+              link.textContent = it.distance_mi!=null ? `${it.label} · ${it.distance_mi} mi` : (it.label||'Item');
+              link.onclick = (e)=>{ e.preventDefault(); this.focusOnItem(it); };
+              li.appendChild(dot); li.appendChild(link); ul.appendChild(li);
+            });
+            text.appendChild(h); text.appendChild(sub); text.appendChild(ul);
+            const btn = document.createElement('button');
+            btn.className = 'text-gray-400 hover:text-gray-200 text-base leading-none';
+            btn.setAttribute('aria-label','Dismiss');
+            btn.textContent = '✕';
+            btn.onclick = () => { try{ clearTimeout(timer); }catch(_){} try{ this.removeHighlights(); }catch(_){} el.remove(); };
+            row.appendChild(text); row.appendChild(btn); el.appendChild(row); root.appendChild(el);
+            let timer = setTimeout(()=>{ try{ this.removeHighlights(); el.remove(); }catch(_){} }, 9000);
+            el.addEventListener('mouseenter', ()=>{ try{ clearTimeout(timer); }catch(_){} });
+            el.addEventListener('mouseleave', ()=>{ timer = setTimeout(()=>{ try{ this.removeHighlights(); el.remove(); }catch(_){} }, 2500); });
+          },
+          async refreshPins() {
+            const kinds = [this.layers.needs?'need':null, this.layers.offers?'offer':null].filter(Boolean).join(',');
+            const url = `/api/pins${kinds?`?kinds=${kinds}`:''}`;
+            try {
+              const res = await fetch(url);
+              const items = await res.json();
+              this._pinMarkers = this._pinMarkers || new Map();
+              this._pinMarkers.clear();
+              this.layerGroups.needs.clearLayers();
+              this.layerGroups.offers.clearLayers();
+              items.forEach(p => {
+                const html = this.markerHtml(p.kind, p.categories, p.urgency);
+                const icon = L.divIcon({ className: '', html });
+                const marker = L.marker([p.lat, p.lng], { icon });
+                marker.on('click', () => this.openPin(p));
+                if (p.kind === 'need') this.layerGroups.needs.addLayer(marker); else this.layerGroups.offers.addLayer(marker);
+                if (p.id) this._pinMarkers.set(p.id, marker);
+              });
+              this.renderVisibility();
+            } catch (e) { this.toast('Failed to load pins'); }
+          },
           async refreshPins() {
             const kinds = [this.layers.needs?'need':null, this.layers.offers?'offer':null].filter(Boolean).join(',');
             const url = `/api/pins${kinds?`?kinds=${kinds}`:''}`;
@@ -481,7 +707,8 @@
               const res = await fetch('/api/food');
               const items = await res.json();
               this.layerGroups.food.clearLayers();
-              items.forEach(s => { const m = L.marker([s.lat, s.lng]); m.bindPopup(`<div class='text-sm'><div class='font-semibold'>${s.name}</div><div class='text-xs text-gray-400'>${s.kind} · ${s.status||''}</div><div>${s.needs||''}</div></div>`); this.layerGroups.food.addLayer(m); });
+              const icon = L.icon({ iconUrl: '/static/icons/food.svg', iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -24] });
+              items.forEach(s => { const m = L.marker([s.lat, s.lng], { icon }); const link = s.website? `<a href='${s.website}' target='_blank' class='underline'>Website</a>`:''; m.bindPopup(`<div class='text-sm'><div class='font-semibold'>${s.name}</div><div class='text-xs text-gray-400'>Food bank · ${s.status||''}</div><div>${s.needs||''}</div>${link?`<div class='text-xs mt-1'>${link}</div>`:''}</div>`); this.layerGroups.food.addLayer(m); });
               this.renderVisibility();
               const latest = items.reduce((acc, x) => Math.max(acc, Date.parse(x.last_updated||0)||0), 0);
               if (latest) this.statusFood = `Food/Supply · updated ${this.timeAgo(latest)} ago`;
@@ -529,7 +756,31 @@
           ageText(p){ if(!p.created_at) return ''; const ts = Date.parse(p.created_at); return this.timeAgo(ts)+' ago'; },
           badgeStyle(kind,c){ const color = (this.colors[kind] && this.colors[kind][c]) || '#4b5563'; return `border-color:${color}; color:${color}`; },
           async reportSelected(){ if(!this.selectedPin) return; await fetch(`/api/pins/${this.selectedPin.id}/report`,{method:'POST'}); this.toast('Reported'); this.closePin(); this.refreshPins(); },
-          toast(msg){ const el=document.createElement('div'); el.className='fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-gray-100 border border-gray-700 px-3 py-2 rounded text-sm z-[1000]'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),2000); },
+          toast(msg, duration=7000){
+            let root = document.getElementById('toast-root');
+            if (!root) {
+              root = document.createElement('div');
+              root.id = 'toast-root';
+              root.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 z-[1000] grid gap-2 w-[90%] max-w-[520px]';
+              document.body.appendChild(root);
+            }
+            const el = document.createElement('div');
+            el.className = 'bg-gray-900/95 text-gray-100 border border-gray-700 px-3 py-2 rounded text-sm shadow';
+            const row = document.createElement('div');
+            row.className = 'flex items-start justify-between gap-3';
+            const text = document.createElement('div');
+            text.className = 'pr-2';
+            text.textContent = msg;
+            const btn = document.createElement('button');
+            btn.className = 'text-gray-400 hover:text-gray-200 text-base leading-none';
+            btn.setAttribute('aria-label','Dismiss');
+            btn.textContent = '✕';
+            btn.onclick = () => { try{ clearTimeout(timer); }catch(_){} el.remove(); };
+            row.appendChild(text); row.appendChild(btn); el.appendChild(row); root.appendChild(el);
+            let timer = setTimeout(()=>{ try{ el.remove(); }catch(_){} }, duration);
+            el.addEventListener('mouseenter', ()=>{ try{ clearTimeout(timer); }catch(_){} });
+            el.addEventListener('mouseleave', ()=>{ timer = setTimeout(()=>{ try{ el.remove(); }catch(_){} }, 2000); });
+          },
         }
       }
       document.addEventListener('alpine:init', () => {

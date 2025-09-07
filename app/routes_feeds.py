@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 
@@ -72,14 +72,21 @@ async def houston_311():
 
 
 @router.get("/flood/wms")
-async def flood_wms_proxy(
-    url: str = Query(..., description="Full WMS URL to proxy"),
-):
-    # Simple streaming proxy for WMS tiles/images
+async def flood_wms_proxy(request: Request):
+    """
+    Streaming proxy for WMS tiles. Forwards the incoming querystring to the configured
+    upstream WMS server to avoid CORS and allow tiled requests from the browser.
+    """
+    base = os.getenv("FLOOD_WMS_URL")
+    if not base:
+        raise HTTPException(status_code=400, detail="FLOOD_WMS_URL not configured")
+    qs = str(request.url.query)
+    upstream = f"{base}?{qs}" if qs else base
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url)
-            return StreamingResponse(resp.aiter_bytes(), media_type=resp.headers.get("content-type", "application/octet-stream"))
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(upstream)
+            media = resp.headers.get("content-type", "image/png")
+            return StreamingResponse(resp.aiter_bytes(), media_type=media, status_code=resp.status_code)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"WMS proxy error: {exc}")
 
