@@ -152,7 +152,8 @@ def _answerer_model():
 
 
 async def _fetch_basic_context() -> Dict[str, Any]:
-    base = os.getenv("SELF_BASE_URL", "http://127.0.0.1:8000")
+    # Prefer explicit SELF_BASE_URL; otherwise use container's PORT to talk to self
+    base = (os.getenv("SELF_BASE_URL") or f"http://127.0.0.1:{os.getenv('PORT', '8000')}")
     async with httpx.AsyncClient(base_url=base, timeout=10) as c:
         r1 = await c.get("/api/pins")
         r2 = await c.get("/api/shelters")

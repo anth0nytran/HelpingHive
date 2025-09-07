@@ -452,22 +452,24 @@
             const body = { question: q, center: this.center, radius_mi: this.radius || 5 };
             try{
               const res = await fetch('/api/assist/qna', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-              const data = await res.json();
-              if (data && data.ask) { this.toast(data.ask); }
-              else if (data && data.answer) {
-                const isFallback = data.mode==='fallback';
-                const prefix = isFallback ? '[Summary] ' : '';
-                if (data.ui && data.ui.items) {
-                  this.toastRich({ title: data.ui.title||'Answer', subtitle: prefix + (data.ui.subtitle||''), items: data.ui.items });
-                } else {
-                  this.toast(prefix + data.answer);
-                }
-                if (isFallback && data.reason) {
-                  console.warn('Assist fallback reason:', data.reason);
-                  this.toast(`[Reason] ${data.reason}`);
-                }
+              let data = null;
+              try { data = await res.json(); } catch(_) { this.toast('Assist response not JSON'); return; }
+              const isFallback = data && data.mode==='fallback';
+              const prefix = isFallback ? '[Summary] ' : '';
+              if (data && data.ui && data.ui.items) {
+                this.toastRich({ title: data.ui.title||'Answer', subtitle: prefix + (data.ui.subtitle||''), items: data.ui.items });
+                if (isFallback && data.reason) { console.warn('Assist fallback reason:', data.reason); this.toast(`[Reason] ${data.reason}`); }
+                return;
               }
-              else { this.toast('No answer'); }
+              if (data && typeof data.answer === 'string') {
+                this.toast(prefix + data.answer);
+                if (isFallback && data.reason) { console.warn('Assist fallback reason:', data.reason); this.toast(`[Reason] ${data.reason}`); }
+                return;
+              }
+              if (data && data.ask) { this.toast(data.ask); return; }
+              if (data && data.detail) { this.toast(`[Error] ${data.detail}`); return; }
+              console.warn('Assist unknown response:', data);
+              this.toast('No answer');
             } catch(_){ this.toast('Assist unavailable'); }
           },
           focusOnItem(item){

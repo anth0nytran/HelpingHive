@@ -6,7 +6,6 @@ builder = "NIXPACKS"
 
 [env]
 PYTHONUNBUFFERED = "1"
-PORT = "8000"
 
 [nixpacks]
 providers = ["python"]
