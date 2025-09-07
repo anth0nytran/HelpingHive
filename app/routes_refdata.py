@@ -34,6 +34,7 @@ async def _fetch_json(url: str) -> Any:
 
 def _arcgis_to_points(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     points: List[Dict[str, Any]] = []
+    sr = (data.get("spatialReference") or {}).get("wkid") or None
     for feat in (data.get("features") or []):
         attrs = feat.get("attributes") or {}
         geom = feat.get("geometry") or {}
@@ -41,7 +42,25 @@ def _arcgis_to_points(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         lng = attrs.get("Longitude") or attrs.get("X") or geom.get("x")
         if lat is None or lng is None:
             continue
-        points.append({"lat": float(lat), "lng": float(lng), "attrs": attrs})
+        try:
+            lat_f = float(lat)
+            lng_f = float(lng)
+        except Exception:
+            continue
+        # Auto-convert Web Mercator (meters) to WGS84 if values out of lat/lng range
+        if abs(lat_f) > 90 or abs(lng_f) > 180 or (sr in (102100, 3857)):
+            try:
+                # EPSG:3857 → EPSG:4326
+                R = 6378137.0
+                x = lng_f
+                y = lat_f
+                lng_f = (x / R) * 180.0 / 3.141592653589793
+                lat_f = (2 * ( (y / R) ))
+                lat_f = (180.0 / 3.141592653589793) * (0.5 * (3.141592653589793 + ( (lambda t: (2*__import__('math').atan(__import__('math').exp(t)) - 3.141592653589793))(lat_f) )))
+            except Exception:
+                # Fallback: skip invalid point
+                continue
+        points.append({"lat": lat_f, "lng": lng_f, "attrs": attrs})
     return points
 
 def _std_shelter(item: Dict[str, Any]) -> Dict[str, Any]:
