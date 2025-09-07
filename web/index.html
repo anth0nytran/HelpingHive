@@ -55,6 +55,8 @@
           <button @click="toggle('food')" :class="layers.food ? 'bg-gray-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">Food/Supply</button>
           <button @click="toggle('feed311')" :class="layers.feed311 ? 'bg-blue-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">311</button>
           <button @click="toggle('flood')" :class="layers.flood ? 'bg-indigo-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">Flood</button>
+          <button @click="toggle('metro_bus')" :class="layers.metro_bus ? 'bg-red-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">Bus Routes</button>
+          <button @click="toggle('food_deserts')" :class="layers.food_deserts ? 'bg-green-700' : 'bg-gray-800'" class="px-2 py-1 rounded text-xs">Food Deserts</button>
         </div>
         <div class="flex items-center gap-2 ml-auto">
           <input x-model="qaQ" @keydown.enter.prevent="askQa()" class="px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs w-40" placeholder="Ask the map" />
@@ -202,7 +204,7 @@
           defaultCenter: [29.7604, -95.3698],
           radius: null,
           radiusCircle: null,
-          layers: { needs: true, offers: true, shelters: true, food: true, feed311: true, flood: false },
+          layers: { needs: true, offers: true, shelters: true, food: true, feed311: true, flood: false, metro_bus: false, food_deserts: false },
           layerGroups: {},
           intervals: [],
           ui: { createOpen: false, pinOpen: false, picking: false, floodConfig: false },
@@ -305,6 +307,18 @@
             this.map.on('zoomstart', () => { this.pauseDuringNavigate(); });
             this.map.on('moveend', () => { this.center=[this.map.getCenter().lat,this.map.getCenter().lng]; this.resumeAfterNavigate(); this.refreshPins(); this.scheduleFloodVector(); });
             this.map.on('zoomend', () => { this.resumeAfterNavigate(); this.scheduleFloodVector(); });
+            // Refresh overlays on idle if enabled
+            // Stable refresh on move/zoom end with debounce to avoid flicker
+            let _ovTimer = null;
+            const debounced = () => {
+              clearTimeout(_ovTimer);
+              _ovTimer = setTimeout(() => {
+                if (this.layers.metro_bus) this.refreshOverlay('metro_bus');
+                if (this.layers.food_deserts) this.refreshOverlay('food_deserts');
+              }, 150);
+            };
+            this.map.on('moveend', debounced);
+            this.map.on('zoomend', debounced);
           },
           initLayers() {
             const clusterOpts = { showCoverageOnHover:false, spiderfyOnMaxZoom:true, maxClusterRadius: 50, chunkedLoading: true, chunkDelay: 20, chunkInterval: 50 };
@@ -313,6 +327,8 @@
             this.layerGroups.shelters = L.layerGroup().addTo(this.map);
             this.layerGroups.food = L.layerGroup().addTo(this.map);
             this.layerGroups.feed311 = L.layerGroup().addTo(this.map);
+            this.layerGroups.metro_bus = L.layerGroup();
+            this.layerGroups.food_deserts = L.layerGroup();
             // Prefer ArcGIS dynamic (user reported WMS issues); fallback to WMS
             if (this.floodArcgisUrl && L.esri) {
               this.initArcgisFlood();
@@ -411,7 +427,31 @@
               }
               return;
             }
+            if (key === 'metro_bus' || key === 'food_deserts') {
+              if (this.layers[key]) { await this.refreshOverlay(key); this.layerGroups[key].addTo(this.map); }
+              else { this.map.removeLayer(this.layerGroups[key]); }
+              return;
+            }
             this.renderVisibility();
+          },
+          async refreshOverlay(key){
+            try{
+              const b = this.map.getBounds();
+              const bbox = `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
+              const url = key==='metro_bus' ? `/api/overlay/metro_bus?bbox=${encodeURIComponent(bbox)}` : `/api/overlay/food_deserts?bbox=${encodeURIComponent(bbox)}`;
+              const res = await fetch(url);
+              const geo = await res.json();
+              const grp = this.layerGroups[key];
+              grp.clearLayers();
+              if (!geo || !geo.features) return;
+              if (key==='metro_bus'){
+                const style = { color:'#ef4444', weight: 2, opacity: 0.9 };
+                L.geoJSON(geo, { style: _ => style, pane: 'overlayPane' }).addTo(grp);
+              } else {
+                const style = feature => ({ color:'#10b981', weight:1, fillColor:'#065f46', fillOpacity:0.15 });
+                L.geoJSON(geo, { style, pane: 'overlayPane' }).addTo(grp);
+              }
+            } catch(_){ this.toast('Overlay unavailable'); }
           },
           renderVisibility() {
             for (const k of ['needs','offers','shelters','food','feed311']) {

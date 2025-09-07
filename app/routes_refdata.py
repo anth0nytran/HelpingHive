@@ -152,10 +152,42 @@ async def list_shelters():
     if remote_url:
         if not _cache["s"] or now - _cache["s_ts"] > 300:
             try:
-                data = await _fetch_json(remote_url)
-                points = _arcgis_to_points(data)
-                _cache["s"] = [_std_shelter(p) for p in points]
-                _cache["s_ts"] = now
+                # Prefer ArcGIS FeatureServer query with outSR=4326 to ensure WGS84
+                if ("arcgis/rest/services" in remote_url) and ("FeatureServer" in remote_url):
+                    async with httpx.AsyncClient(timeout=15) as client:
+                        params = {
+                            "f": "geojson",
+                            "where": "1=1",
+                            "outFields": "*",
+                            "returnGeometry": "true",
+                            "outSR": "4326",
+                        }
+                        qurl = remote_url.rstrip("/") + "/query"
+                        r = await client.get(qurl, params=params)
+                        r.raise_for_status()
+                        gj = r.json()
+                    pts: List[Dict[str, Any]] = []
+                    for feat in (gj.get("features") or []):
+                        try:
+                            geom = feat.get("geometry") or {}
+                            props = feat.get("properties") or {}
+                            if geom.get("type") == "Point":
+                                lng, lat = geom.get("coordinates") or [None, None]
+                            else:
+                                # If polygon/polyline, skip for shelters
+                                lng, lat = (None, None)
+                            if lat is None or lng is None:
+                                continue
+                            pts.append({"lat": float(lat), "lng": float(lng), "attrs": props})
+                        except Exception:
+                            continue
+                    _cache["s"] = [_std_shelter(p) for p in pts]
+                    _cache["s_ts"] = now
+                else:
+                    data = await _fetch_json(remote_url)
+                    points = _arcgis_to_points(data)
+                    _cache["s"] = [_std_shelter(p) for p in points]
+                    _cache["s_ts"] = now
             except Exception:
                 _cache["s"] = []
         results.extend(_cache["s"])  

@@ -91,3 +91,50 @@ async def flood_wms_proxy(request: Request):
         raise HTTPException(status_code=502, detail=f"WMS proxy error: {exc}")
 
 
+
+# ---------- ArcGIS FeatureServer overlays (GeoJSON with optional bbox) ----------
+async def _arcgis_query_geojson(url: str, bbox: str | None = None, geometry_sr: str = "4326") -> Dict[str, Any]:
+    params = {
+        "f": "geojson",
+        "where": "1=1",
+        "outFields": "*",
+        "returnGeometry": "true",
+        "outSR": "4326",
+    }
+    if bbox:
+        # bbox = minLng,minLat,maxLng,maxLat in WGS84
+        params.update({
+            "geometry": bbox,
+            "geometryType": "esriGeometryEnvelope",
+            "inSR": geometry_sr,
+            "spatialRel": "esriSpatialRelIntersects",
+        })
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(url.rstrip("/") + "/query", params=params)
+        r.raise_for_status()
+        data = r.json()
+        # Cap features for safety
+        if isinstance(data, dict) and "features" in data:
+            data["features"] = data["features"][:2000]
+        return data
+
+
+@router.get("/overlay/metro_bus")
+async def overlay_metro_bus(bbox: str | None = Query(None, description="minLng,minLat,maxLng,maxLat")):
+    url = os.getenv("METRO_BUS_FEATURE_URL", "https://services.arcgis.com/NummVBqZSIJKUeVR/arcgis/rest/services/METRO_Frequent_Bus_Routes/FeatureServer/0")
+    try:
+        data = await _arcgis_query_geojson(url, bbox=bbox)
+        return JSONResponse(data)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"metro_bus overlay error: {exc}")
+
+
+@router.get("/overlay/food_deserts")
+async def overlay_food_deserts(bbox: str | None = Query(None, description="minLng,minLat,maxLng,maxLat")):
+    url = os.getenv("FOOD_DESERTS_FEATURE_URL", "https://services.arcgis.com/NummVBqZSIJKUeVR/arcgis/rest/services/Food_Deserts/FeatureServer/0")
+    try:
+        data = await _arcgis_query_geojson(url, bbox=bbox)
+        return JSONResponse(data)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"food_deserts overlay error: {exc}")
+
