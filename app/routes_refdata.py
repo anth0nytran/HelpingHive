@@ -63,6 +63,65 @@ def _arcgis_to_points(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         points.append({"lat": lat_f, "lng": lng_f, "attrs": attrs})
     return points
 
+
+async def _arcgis_query_features(url: str) -> List[Dict[str, Any]]:
+    """Query an ArcGIS FeatureServer layer robustly and return list of features (dicts).
+    Tries f=geojson first; if not supported returns f=json and converts to GeoJSON-like dicts.
+    """
+    params = {
+        "where": "1=1",
+        "outFields": "*",
+        "returnGeometry": "true",
+        "outSR": "4326",
+    }
+    qurl = url.rstrip("/") + "/query"
+    # Try GeoJSON response
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            p = {**params, "f": "geojson"}
+            r = await client.get(qurl, params=p)
+            r.raise_for_status()
+            gj = r.json()
+            feats = gj.get("features") or []
+            if feats:
+                return feats
+    except Exception:
+        pass
+    # Fallback to JSON and convert
+    async with httpx.AsyncClient(timeout=20) as client:
+        p = {**params, "f": "json"}
+        r = await client.get(qurl, params=p)
+        r.raise_for_status()
+        data = r.json()
+        feats = []
+        for f in (data.get("features") or []):
+            attrs = f.get("attributes") or {}
+            geom = f.get("geometry") or {}
+            lat = None
+            lng = None
+            # Point geometry
+            if "y" in geom and "x" in geom:
+                lat = geom.get("y")
+                lng = geom.get("x")
+            # Polygon centroid (simple average of ring vertices)
+            elif "rings" in geom:
+                try:
+                    xs = []
+                    ys = []
+                    for ring in geom.get("rings") or []:
+                        for pt in ring:
+                            xs.append(pt[0])
+                            ys.append(pt[1])
+                    if xs and ys:
+                        lng = sum(xs) / len(xs)
+                        lat = sum(ys) / len(ys)
+                except Exception:
+                    lat, lng = None, None
+            if lat is None or lng is None:
+                continue
+            feats.append({"geometry": {"type": "Point", "coordinates": [lng, lat]}, "properties": attrs})
+        return feats
+
 def _std_shelter(item: Dict[str, Any]) -> Dict[str, Any]:
     attrs = item.get("attrs", {})
     t = attrs.get("Type") or attrs.get("Source") or "official"
@@ -154,31 +213,17 @@ async def list_shelters():
             try:
                 # Prefer ArcGIS FeatureServer query with outSR=4326 to ensure WGS84
                 if ("arcgis/rest/services" in remote_url) and ("FeatureServer" in remote_url):
-                    async with httpx.AsyncClient(timeout=15) as client:
-                        params = {
-                            "f": "geojson",
-                            "where": "1=1",
-                            "outFields": "*",
-                            "returnGeometry": "true",
-                            "outSR": "4326",
-                        }
-                        qurl = remote_url.rstrip("/") + "/query"
-                        r = await client.get(qurl, params=params)
-                        r.raise_for_status()
-                        gj = r.json()
+                    feats = await _arcgis_query_features(remote_url)
                     pts: List[Dict[str, Any]] = []
-                    for feat in (gj.get("features") or []):
+                    for feat in feats:
                         try:
                             geom = feat.get("geometry") or {}
                             props = feat.get("properties") or {}
                             if geom.get("type") == "Point":
                                 lng, lat = geom.get("coordinates") or [None, None]
-                            else:
-                                # If polygon/polyline, skip for shelters
-                                lng, lat = (None, None)
-                            if lat is None or lng is None:
-                                continue
-                            pts.append({"lat": float(lat), "lng": float(lng), "attrs": props})
+                                if lat is None or lng is None:
+                                    continue
+                                pts.append({"lat": float(lat), "lng": float(lng), "attrs": props})
                         except Exception:
                             continue
                     _cache["s"] = [_std_shelter(p) for p in pts]
