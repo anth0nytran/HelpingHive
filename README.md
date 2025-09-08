@@ -21,7 +21,43 @@ Community crisis mapping for needs and offers in real‑time.
 HelpingHive is a lightweight web app that connects people who need help with neighbors who can offer help. It highlights official resources (shelters, food/supply) alongside community pins.
 
 ### Screenshots
-(Add screenshots here)
+<div align="center">
+
+<table>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="https://github.com/user-attachments/assets/f767c170-d4db-474a-bdea-a029f15037a0" alt="Map UI" width="900" />
+      <br/>
+      <sub>Map UI</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/3cfc394d-5dfa-45a0-8b89-64da770627f1" alt="HelpingHive AI Agent" width="420" />
+      <br/>
+      <sub>HelpingHive AI Agent</sub>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/ed3d8be7-002b-4a25-b25f-52661e8aa748" alt="Pin Posting" width="420" />
+      <br/>
+      <sub>Real‑time Need/Offer Pin Posting</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/387a0ebc-791e-44e7-927a-d6310af4baa4" alt="Pin Comments" width="420" />
+      <br/>
+      <sub>Real‑time Pin Updates</sub>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/10ebc969-d2d7-44e8-9150-2696f10762a2" alt="Local Pin Visuals" width="420" />
+      <br/>
+      <sub>Local Pin Visuals</sub>
+    </td>
+  </tr>
+</table>
+
+</div>
 
 ### Features
 - Modern, minimal map UI with a bottom pill bar (Layers · + Add · Tools · Chat)

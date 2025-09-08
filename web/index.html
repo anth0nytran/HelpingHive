@@ -125,7 +125,7 @@
             <button @click="ui.rightOpen=!ui.rightOpen" class="w-9 h-9 grid place-items-center rounded-full bg-gray-800/80 text-gray-200 border border-gray-700 hover:border-gray-500" aria-label="Tools">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm9 5a1 1 0 0 0-1-1h-1.06a8.01 8.01 0 0 0-1.2-2.9l.75-.75a1 1 0 1 0-1.41-1.41l-.75.75A8.01 8.01 0 0 0 13 4.06V3a1 1 0 1 0-2 0v1.06a8.01 8.01 0 0 0-2.9 1.2l-.75-.75a1 1 0 1 0-1.41 1.41l.75.75A8.01 8.01 0 0 0 4.06 11H3a1 1 0 1 0 0 2h1.06a8.01 8.01 0 0 0 1.2 2.9l-.75.75a1 1 0 1 0 1.41 1.41l.75-.75a8.01 8.01 0 0 0 2.9 1.2V21a1 1 0 1 0 2 0v-1.06a8.01 8.01 0 0 0 2.9-1.2l.75.75a1 1 0 1 0 1.41-1.41l-.75-.75a8.01 8.01 0 0 0 1.2-2.9H20a1 1 0 1 0 1-1z"/></svg>
             </button>
-            <button @click="ui.chatOpen=!ui.chatOpen" class="w-9 h-9 grid place-items-center rounded-full bg-gray-800/80 text-gray-200 border border-gray-700 hover:border-gray-500" aria-label="HelpHive chat">
+            <button @click="openChat()" class="w-9 h-9 grid place-items-center rounded-full bg-gray-800/80 text-gray-200 border border-gray-700 hover:border-gray-500" aria-label="HelpHive chat">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v10H7l-3 3V4z"/></svg>
             </button>
           </div>
@@ -161,12 +161,12 @@
         </div>
       </div>
       <!-- HelpHive Chat Window -->
-      <div x-show="ui.chatOpen" class="fixed bottom-20 right-3 z-[960] w-[360px] max-w-[92vw] bg-gray-900/95 border border-gray-800 rounded-lg shadow-xl" style="display:none">
+      <div x-show="ui.chatOpen" class="fixed bottom-20 right-3 z-[960] w-[380px] max-w-[94vw] bg-gray-900/95 border border-gray-800 rounded-lg shadow-xl" style="display:none">
         <div class="px-3 py-2 border-b border-gray-800 flex items-center justify-between">
           <div class="font-semibold">HelpingHive</div>
           <button @click="closeChat()" class="text-gray-400 hover:text-gray-200">✕</button>
         </div>
-        <div class="p-3 space-y-2 max-h-[320px] overflow-y-auto" id="hh-chat-body">
+        <div class="p-3 space-y-2 max-h-[340px] overflow-y-auto" id="hh-chat-body">
           <template x-for="m in chatMsgs" :key="m.id">
             <div :class="m.role==='user'?'text-right':''" class="space-y-1">
               <div :class="m.role==='user'?'bg-amber-500 text-black':'bg-gray-800 text-gray-100'" class="inline-block px-2 py-1 rounded max-w-[260px] whitespace-pre-line">
@@ -183,6 +183,15 @@
               </template>
             </div>
           </template>
+        </div>
+        <!-- Suggested questions -->
+        <div class="px-3 pb-2">
+          <div class="text-[10px] text-gray-400 mb-1">Try asking</div>
+          <div class="flex flex-wrap gap-2">
+            <template x-for="(q, i) in chatSuggestions" :key="i">
+              <button @click="sendQuick(q)" class="px-2 py-1 rounded-full bg-gray-800 border border-gray-700 text-[11px] text-gray-200 hover:border-gray-500" x-text="q"></button>
+            </template>
+          </div>
         </div>
         <div class="p-3 border-t border-gray-800 flex items-center gap-2">
           <input x-model="chatInput" @keydown.enter.prevent="sendChat()" class="flex-1 px-2 py-2 rounded bg-gray-800 border border-gray-700 text-sm" placeholder="Ask the map" />
@@ -599,6 +608,12 @@
           refreshAll() { this.refreshPins(); this.refreshShelters(); this.refreshFood(); this.refresh311(); },
           chatMsgs: [],
           chatInput: '',
+          chatSuggestions: [
+            'What is the closest shelter to me?',
+            'Where are food banks within 5 miles?',
+            'Show offers near me',
+            'Summarize what is in view'
+          ],
           async askQa(){
             const q = (this.qaQ||'').trim(); if(!q) return;
             const body = { question: q, center: this.center, radius_mi: this.radius || 5 };
@@ -624,6 +639,16 @@
               this.toast('No answer');
             } catch(_){ this.toast('Assist unavailable'); }
           },
+          openChat(){
+            if (!this.ui.chatOpen) {
+              this.ui.chatOpen = true;
+              if (!this.chatMsgs.length) {
+                this.chatMsgs.push({ id: Date.now()+':welcome', role: 'assistant', text: "Hi, I'm HelpingHive. Ask about shelters, food sites, offers, flood zones, or 311 data in your view. Try the suggestions below." });
+              }
+              this.$nextTick(()=>{ try{ const el=document.getElementById('hh-chat-body'); el.scrollTop=el.scrollHeight; }catch(_){} });
+            }
+          },
+          sendQuick(q){ this.chatInput = q; this.sendChat(); },
           async sendChat(){
             const q = (this.chatInput||'').trim(); if(!q) return;
             this.chatMsgs.push({ id: Date.now()+':u', role: 'user', text: q });
