@@ -20,8 +20,15 @@ Community crisis mapping for needs and offers in real‑time.
 ### Overview
 HelpingHive is a lightweight web app that connects people who need help with neighbors who can offer help. It highlights official resources (shelters, food/supply) alongside community pins.
 
+### Try it out here: https://helpinghive.up.railway.app/
+
 ### Screenshots
-(Add screenshots here)
+<img width="1918" height="865" alt="Map UI" src="https://github.com/user-attachments/assets/f767c170-d4db-474a-bdea-a029f15037a0" />
+<img width="375" height="337" alt="HelpingHive AI Agent" src="https://github.com/user-attachments/assets/3cfc394d-5dfa-45a0-8b89-64da770627f1" />
+<img width="528" height="561" alt="Pin Posting" src="https://github.com/user-attachments/assets/ed3d8be7-002b-4a25-b25f-52661e8aa748" />
+<img width="609" height="380" alt="Pin Comments" src="https://github.com/user-attachments/assets/387a0ebc-791e-44e7-927a-d6310af4baa4" />
+
+
 
 ### Features
 - Modern, minimal map UI with a bottom pill bar (Layers · + Add · Tools · Chat)
