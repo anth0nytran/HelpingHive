@@ -60,10 +60,7 @@ HelpingHive is a lightweight web app that connects people who need help with nei
 </table>
 
 </div>
-<<<<<<< HEAD
-=======
 
->>>>>>> 68df1f36ff0553897da5d2de565c0fcba4412dbc
 
 ### Features
 - Modern, minimal map UI with a bottom pill bar (Layers · + Add · Tools · Chat)
