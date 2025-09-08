@@ -47,6 +47,16 @@ def service_worker() -> FileResponse:
 
 @app.get("/favicon.ico")
 def favicon() -> FileResponse:
+    # Prefer custom SVG/PNG in data/, then web/static, else default SVG
+    data_svg = BASE_DIR / "data" / "helpier icon.svg"
+    if data_svg.exists():
+        return FileResponse(data_svg, media_type="image/svg+xml")
+    data_png = BASE_DIR / "data" / "helpie.png"
+    if data_png.exists():
+        return FileResponse(data_png, media_type="image/png")
+    static_png = WEB_DIR / "static" / "helpie.png"
+    if static_png.exists():
+        return FileResponse(static_png, media_type="image/png")
     return FileResponse(WEB_DIR / "static" / "icons" / "icon.svg", media_type="image/svg+xml")
 
 

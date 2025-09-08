@@ -1,9 +1,17 @@
 import asyncio
+import sys
 import os
 from datetime import datetime, timedelta, timezone
 import random
 import json
 from dotenv import load_dotenv
+
+# Windows + psycopg async needs Selector policy (Proactor not supported)
+if sys.platform.startswith("win"):
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except Exception:
+        pass
 
 import psycopg
 

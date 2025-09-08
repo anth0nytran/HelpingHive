@@ -1,8 +1,28 @@
 [
   {"kind":"need","categories":["Food"],"title":"Need water","body":"Family needs bottled water","lat":29.7604,"lng":-95.3698},
-  {"kind":"need","categories":["Shelter"],"title":"Shelter needed","body":"2 adults, 1 child","lat":29.752,"lng":-95.38},
-  {"kind":"offer","categories":["Meals"],"title":"Free meals","body":"Hot meals 5-8pm","lat":29.74,"lng":-95.37},
-  {"kind":"offer","categories":["Transport"],"title":"Rides to shelters","body":"4 seats available","lat":29.77,"lng":-95.36}
+  {"kind":"need","categories":["Shelter"],"title":"Shelter needed","body":"2 adults, 1 child","lat":29.7520,"lng":-95.3800},
+  {"kind":"offer","categories":["Meals"],"title":"Free meals","body":"Hot meals 5-8pm","lat":29.7400,"lng":-95.3700},
+  {"kind":"offer","categories":["Transport"],"title":"Rides to shelters","body":"4 seats available","lat":29.7700,"lng":-95.3600},
+
+  {"kind":"need","categories":["Supplies"],"title":"Cleaning kits","body":"Requesting bleach and gloves","lat":29.8125,"lng":-95.4095},
+  {"kind":"need","categories":["Medical Aid"],"title":"First aid","body":"Basic first aid needed","lat":29.6950,"lng":-95.3110},
+  {"kind":"need","categories":["Transport"],"title":"Ride needed","body":"To nearest shelter","lat":29.8670,"lng":-95.3330},
+  {"kind":"need","categories":["Food"],"title":"Baby formula","body":"Urgent need for infant formula","lat":29.6810,"lng":-95.4340},
+
+  {"kind":"offer","categories":["Beds"],"title":"Spare room","body":"2 beds for 3 nights","lat":29.8530,"lng":-95.5030},
+  {"kind":"offer","categories":["Supplies"],"title":"Tarps & tools","body":"Free tarps and basic tools","lat":29.7330,"lng":-95.2870},
+  {"kind":"offer","categories":["Medical"],"title":"Nurse on site","body":"Basic triage available","lat":29.7860,"lng":-95.2200},
+  {"kind":"offer","categories":["Meals"],"title":"BBQ plates","body":"Serving dinner 6-9pm","lat":29.6320,"lng":-95.5520},
+
+  {"kind":"need","categories":["Shelter"],"title":"Elderly couple","body":"Needs accessible shelter","lat":29.9290,"lng":-95.5850},
+  {"kind":"need","categories":["Supplies"],"title":"Diapers","body":"Sizes 3-5 needed","lat":29.8550,"lng":-95.1630},
+  {"kind":"need","categories":["Food"],"title":"Groceries","body":"Non‑perishables requested","lat":29.5980,"lng":-95.1460},
+
+  {"kind":"offer","categories":["Transport"],"title":"Truck for hauls","body":"Can move supplies","lat":29.7050,"lng":-95.4720},
+  {"kind":"offer","categories":["Meals"],"title":"Community kitchen","body":"Lunch 12‑2pm","lat":29.8800,"lng":-95.4300},
+  {"kind":"offer","categories":["Beds"],"title":"Cots available","body":"Gym opened as shelter","lat":29.7210,"lng":-95.5290},
+  {"kind":"offer","categories":["Supplies"],"title":"Bottled water","body":"Pickup location","lat":29.7705,"lng":-95.1800},
+  {"kind":"offer","categories":["Medical"],"title":"Mobile clinic","body":"Vaccines and checkups","lat":29.6400,"lng":-95.2500}
 ]
 
 

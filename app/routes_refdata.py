@@ -211,8 +211,9 @@ async def list_shelters():
     if remote_url:
         if not _cache["s"] or now - _cache["s_ts"] > 300:
             try:
-                # Prefer ArcGIS FeatureServer query with outSR=4326 to ensure WGS84
-                if ("arcgis/rest/services" in remote_url) and ("FeatureServer" in remote_url):
+                # Prefer ArcGIS FeatureServer layer URLs (not direct /query URLs)
+                is_arcgis_layer = ("arcgis/rest/services" in remote_url) and ("FeatureServer" in remote_url) and ("/query" not in remote_url)
+                if is_arcgis_layer:
                     feats = await _arcgis_query_features(remote_url)
                     pts: List[Dict[str, Any]] = []
                     for feat in feats:
@@ -229,6 +230,7 @@ async def list_shelters():
                     _cache["s"] = [_std_shelter(p) for p in pts]
                     _cache["s_ts"] = now
                 else:
+                    # Accept direct ArcGIS /query URLs or plain JSON
                     data = await _fetch_json(remote_url)
                     points = _arcgis_to_points(data)
                     _cache["s"] = [_std_shelter(p) for p in points]
