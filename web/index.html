@@ -73,8 +73,11 @@
       </div>
       
       <div id="map"></div>
-      <!-- Legend (top-right) with timestamps -->
-      <div x-show="!ui.picking && !ui.leftOpen && !ui.rightOpen && !ui.chatOpen" class="absolute right-3 top-3 z-[600] bg-gray-900/95 border border-gray-800 rounded-xl p-3.5 text-[12px] shadow-xl legend">
+      <!-- Legend (top-right) with timestamps) -->
+      <button @click="ui.legendOpen=!ui.legendOpen" class="absolute right-2 top-2 sm:right-3 sm:top-3 z-[610] w-9 h-9 grid place-items-center rounded-full bg-gray-900/90 border border-gray-800 text-gray-200 shadow hover:border-gray-600" aria-label="Toggle legend">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z"/></svg>
+      </button>
+      <div x-show="ui.legendOpen && !ui.picking && !ui.leftOpen && !ui.rightOpen && !ui.chatOpen" class="absolute right-2 top-12 sm:right-3 sm:top-14 z-[600] bg-gray-900/95 border border-gray-800 rounded-xl p-3 text-[11px] sm:text-[12px] shadow-xl legend max-w-[300px] sm:max-w-[420px]">
         <div class="font-semibold text-gray-200 tracking-wide">Legend</div>
         <div class="mt-2 space-y-2">
           <div class="flex items-center gap-2">
@@ -106,7 +109,7 @@
         </div>
       </div>
       <!-- Modern Bottom Bar (pill) -->
-      <div class="fixed bottom-0 left-0 right-0 z-[900] pointer-events-none">
+      <div x-show="!ui.createOpen && !ui.picking && !ui.chatOpen" class="fixed bottom-0 left-0 right-0 z-[900] pointer-events-none" style="padding-bottom: max(env(safe-area-inset-bottom,0px),8px);">
         <div class="mx-auto my-3 max-w-[980px] h-14 px-4 rounded-full bg-gradient-to-r from-[#0b1220]/95 to-[#0e172a]/90 border border-gray-700/80 shadow-xl grid items-center pointer-events-auto" style="grid-template-columns: 1fr auto 1fr;">
           <!-- Left cluster -->
           <div class="flex items-center gap-2 justify-start">
@@ -115,10 +118,10 @@
             </button>
           </div>
           <!-- Center add button perfectly centered and lifted -->
-          <div class="flex items-center justify-center gap-3">
-            <button @click="toggle('needs')" :class="layers.needs ? 'bg-orange-600 text-white border-orange-500' : 'bg-gray-800/80 text-gray-200'" class="h-11 px-4 rounded-full border border-gray-700 hover:border-gray-500 text-[12px]">Needs</button>
-            <button @click.stop="startCreate()" class="w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-400 text-black text-2xl leading-none shadow-[0_10px_24px_rgba(0,0,0,0.35)] border border-amber-400 ring-8 ring-black/25 -mt-6" aria-label="Add pin">+</button>
-            <button @click="toggle('offers')" :class="layers.offers ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-gray-800/80 text-gray-200'" class="h-11 px-4 rounded-full border border-gray-700 hover:border-gray-500 text-[12px]">Offers</button>
+          <div class="flex items-center justify-center gap-2 sm:gap-3">
+            <button @click="toggle('needs')" :class="layers.needs ? 'bg-orange-600 text-white border-orange-500' : 'bg-gray-800/80 text-gray-200'" class="h-10 sm:h-11 px-3 sm:px-4 rounded-full border border-gray-700 hover:border-gray-500 text-[11px] sm:text-[12px]">Needs</button>
+            <button @click.stop="startCreate()" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500 hover:bg-amber-400 text-black text-2xl leading-none shadow-[0_10px_24px_rgba(0,0,0,0.35)] border border-amber-400 ring-8 ring-black/25 -mt-5 sm:-mt-6" aria-label="Add pin">+</button>
+            <button @click="toggle('offers')" :class="layers.offers ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-gray-800/80 text-gray-200'" class="h-10 sm:h-11 px-3 sm:px-4 rounded-full border border-gray-700 hover:border-gray-500 text-[11px] sm:text-[12px]">Offers</button>
           </div>
           <!-- Right cluster -->
           <div class="flex items-center gap-3 justify-end">
@@ -143,7 +146,7 @@
           <button @click="toggle('food_deserts')" :class="layers.food_deserts ? 'bg-green-700' : 'bg-gray-800'" class="px-2 py-1 rounded">Food Deserts</button>
         </div>
       </div>
-      <div x-show="ui.rightOpen && !ui.picking" class="fixed bottom-16 right-3 left-auto z-[950] bg-gray-900/95 border border-gray-800 rounded-lg p-3 text-[12px] shadow-xl w-[280px]" style="display:none">
+      <div x-show="ui.rightOpen && !ui.picking" class="fixed bottom-16 right-2 sm:right-3 left-auto z-[950] bg-gray-900/95 border border-gray-800 rounded-lg p-3 text-[12px] shadow-xl w-[260px] sm:w-[280px]" style="display:none">
         <div class="font-semibold text-gray-200 mb-2">Tools</div>
         <div class="grid grid-cols-[auto,1fr] items-center gap-2">
           <div class="text-gray-400">Radius</div>
@@ -161,7 +164,7 @@
         </div>
       </div>
       <!-- HelpHive Chat Window -->
-      <div x-show="ui.chatOpen" class="fixed bottom-20 right-3 z-[960] w-[380px] max-w-[94vw] bg-gray-900/95 border border-gray-800 rounded-lg shadow-xl" style="display:none">
+      <div x-show="ui.chatOpen" @click.outside="closeChat()" @keydown.escape.window="closeChat()" class="fixed bottom-20 right-3 z-[960] w-[380px] max-w-[94vw] bg-gray-900/95 border border-gray-800 rounded-lg shadow-xl" style="display:none">
         <div class="px-3 py-2 border-b border-gray-800 flex items-center justify-between">
           <div class="font-semibold">HelpingHive</div>
           <button @click="closeChat()" class="text-gray-400 hover:text-gray-200">✕</button>
@@ -206,7 +209,7 @@
         </div>
       </div>
       <div x-show="ui.createOpen && !ui.picking" class="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center" style="display:none">
-        <div class="bg-gray-900 w-full sm:w-[520px] rounded-t-2xl sm:rounded-xl border border-gray-800 p-4">
+        <div class="bg-gray-900 w-full sm:w-[520px] rounded-t-2xl sm:rounded-xl border border-gray-800 p-4 pb-5" style="max-height: 92vh; overflow-y: auto;">
           <div class="flex items-center justify-between">
             <div class="font-semibold">Create <span x-text="newPin.kind==='need' ? 'Need' : 'Offer'"></span></div>
             <button class="text-gray-400" @click="cancelCreate()">✕</button>
@@ -257,13 +260,13 @@
               </div>
             </div>
           </div>
-          <div class="mt-4 flex gap-2">
-            <button @click="primaryCreateAction()" class="flex-1 bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded disabled:opacity-50" :disabled="!canSubmitPin()" x-text="postBtnLabel()"></button>
-            <button @click="cancelCreate()" class="flex-1 bg-gray-800 px-3 py-2 rounded">Cancel</button>
+          <div class="mt-4 flex gap-2 sticky bottom-0 bg-gray-900/95 pt-3">
+            <button @click="primaryCreateAction()" class="flex-1 bg-orange-600 hover:bg-orange-500 text-white px-3 py-3 rounded disabled:opacity-50" :disabled="!canSubmitPin()" x-text="postBtnLabel()"></button>
+            <button @click="cancelCreate()" class="flex-1 bg-gray-800 px-3 py-3 rounded">Cancel</button>
           </div>
         </div>
       </div>
-      <div x-show="ui.pinOpen" class="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center" style="display:none">
+      <div x-show="ui.pinOpen" class="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-[980]" style="display:none">
         <div class="bg-gray-900 w-full sm:w-[520px] rounded-t-2xl sm:rounded-xl border border-gray-800 p-4 max-h-[90vh] overflow-y-auto">
           <div class="flex items-center justify-between">
             <div class="font-semibold" x-text="selectedPin ? (selectedPin.kind==='need'?'Need':'Offer') : ''"></div>
@@ -328,7 +331,7 @@
           layers: { needs: true, offers: true, shelters: true, food: true, feed311: true, flood: false, metro_bus: false, food_deserts: false },
           layerGroups: {},
           intervals: [],
-          ui: { createOpen: false, pinOpen: false, picking: false, floodConfig: false, leftOpen: false, rightOpen: false, chatOpen: false },
+          ui: { createOpen: false, pinOpen: false, picking: false, floodConfig: false, leftOpen: false, rightOpen: false, chatOpen: false, legendOpen: true },
           newPin: { kind: 'need', categories: [], urgency: 2, title: '', body: '', lat: null, lng: null, marker: null },
           categories: { need: ['Food','Shelter','Medical Aid','Transport','Supplies'], offer: ['Meals','Beds','Medical','Transport','Supplies'] },
           userAccuracyCircle: null,
@@ -676,6 +679,8 @@
             if (!item) return;
             this.removeHighlights();
             this.addHighlightForItem(item);
+            // Auto-minimize chat on item focus for better mobile flow
+            this.ui.chatOpen = false;
             if (item.type === 'pin' && item.id && this._pinMarkers && this._pinMarkers.has(item.id)) {
               const m = this._pinMarkers.get(item.id);
               const latlng = m.getLatLng();
@@ -876,6 +881,8 @@
           },
           openPin(pin) {
             this.selectedPin = pin;
+            // Ensure chat does not block the pin panel
+            this.ui.chatOpen = false;
             this.ui.pinOpen = true;
             this.loadComments();
             if (this.commentsTimer) clearInterval(this.commentsTimer);
