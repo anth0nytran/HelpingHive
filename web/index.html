@@ -77,8 +77,10 @@
       <div x-show="!ui.picking && !ui.leftOpen && !ui.rightOpen && !ui.chatOpen" class="absolute right-3 top-3 z-[600] bg-gray-900/95 border border-gray-800 rounded-lg p-3 text-[11px] shadow-xl legend">
         <div class="font-semibold text-gray-200">Legend</div>
         <div class="mt-2 grid grid-cols-[auto,1fr] gap-x-2 gap-y-2 items-center">
-          <span x-html="sampleMarker('need','Food')"></span><span class="text-gray-300">Need help · urgency colors (low→high)</span>
-          <span x-html="sampleMarker('offer','Meals')"></span><span class="text-gray-300">Offering help · green</span>
+          <span x-html="sampleMarker('need','Food',1)"></span><span class="text-gray-300">Need · Low (yellow)</span>
+          <span x-html="sampleMarker('need','Food',2)"></span><span class="text-gray-300">Need · Medium (orange)</span>
+          <span x-html="sampleMarker('need','Food',3)"></span><span class="text-gray-300">Need · High (red)</span>
+          <span x-html="sampleMarker('offer','Meals',2)"></span><span class="text-gray-300">Offer (green)</span>
         </div>
         <div class="mt-2 grid gap-1 text-[10px] text-gray-400">
           <template x-if="statusShelters"><div x-text="statusShelters"></div></template>
@@ -178,16 +180,22 @@
         </div>
       </div>
       <div x-show="ui.createOpen && !ui.picking" class="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center" style="display:none">
-        <div class="bg-gray-900 w-full sm:w-[480px] rounded-t-2xl sm:rounded-xl border border-gray-800 p-4">
+        <div class="bg-gray-900 w-full sm:w-[520px] rounded-t-2xl sm:rounded-xl border border-gray-800 p-4">
           <div class="flex items-center justify-between">
             <div class="font-semibold">Create <span x-text="newPin.kind==='need' ? 'Need' : 'Offer'"></span></div>
             <button class="text-gray-400" @click="cancelCreate()">✕</button>
+          </div>
+          <!-- Steps -->
+          <div class="mt-3 grid grid-cols-3 text-[11px] text-gray-400">
+            <div class="flex items-center gap-2"><span :class="newPin.categories.length?'bg-emerald-600':'bg-gray-700'" class="w-5 h-5 rounded-full grid place-items-center text-white">1</span><span>Pick category</span></div>
+            <div class="flex items-center gap-2"><span :class="(newPin.lat&&newPin.lng)?'bg-emerald-600':'bg-gray-700'" class="w-5 h-5 rounded-full grid place-items-center text-white">2</span><span>Place on map</span></div>
+            <div class="flex items-center gap-2"><span :class="newPin.body.trim().length>0?'bg-emerald-600':'bg-gray-700'" class="w-5 h-5 rounded-full grid place-items-center text-white">3</span><span>Describe</span></div>
           </div>
           <div class="mt-2 flex gap-2">
             <button @click="newPin.kind='need'" :class="newPin.kind==='need'?'bg-orange-600':'bg-gray-800'" class="px-2 py-1 rounded text-xs">Need</button>
             <button @click="newPin.kind='offer'" :class="newPin.kind==='offer'?'bg-teal-600':'bg-gray-800'" class="px-2 py-1 rounded text-xs">Offer</button>
           </div>
-          <div class="text-xs text-gray-400 mt-1">Tap map to choose a spot, or use your location.</div>
+          <div class="text-xs text-gray-400 mt-1">Choose a category, then place your pin, then add a short description.</div>
           <div class="mt-3 grid gap-3">
             <div>
               <label class="text-xs text-gray-400">Category</label>
@@ -196,8 +204,9 @@
                   <button @click="toggleCategory(c)" :class="newPin.categories.includes(c)?'bg-gray-700':'bg-gray-800'" class="px-2 py-1 rounded text-xs" x-text="c"></button>
                 </template>
               </div>
+              <div class="text-[10px] text-gray-500 mt-1" x-show="!newPin.categories.length">Pick at least one</div>
             </div>
-            <div>
+            <div x-show="newPin.kind==='need'">
               <label class="text-xs text-gray-400">Urgency</label>
               <div class="flex gap-2 mt-1">
                 <button @click="newPin.urgency=1" :class="newPin.urgency===1?'bg-yellow-600':'bg-gray-800'" class="px-2 py-1 rounded text-xs">Low</button>
@@ -216,11 +225,14 @@
             </div>
             <div class="flex items-center justify-between gap-2">
               <div class="text-xs text-gray-400" x-text="newPin.lat?`Lat ${newPin.lat.toFixed(4)}, Lng ${newPin.lng.toFixed(4)}`:'Set your location to continue'"></div>
-              <button @click="ui.picking=true; useMyLocation()" class="text-xs px-2 py-1 rounded bg-gray-800">Get my location</button>
+              <div class="flex gap-2">
+                <button @click="ui.picking=true" class="text-xs px-2 py-1 rounded bg-amber-600 text-black">Choose on map</button>
+                <button @click="ui.picking=true; useMyLocation()" class="text-xs px-2 py-1 rounded bg-gray-800">Use my location</button>
+              </div>
             </div>
           </div>
           <div class="mt-4 flex gap-2">
-            <button @click="submitCreate()" class="flex-1 bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded disabled:opacity-50" :disabled="!canSubmitPin()">Post</button>
+            <button @click="primaryCreateAction()" class="flex-1 bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded disabled:opacity-50" :disabled="!canSubmitPin()" x-text="postBtnLabel()"></button>
             <button @click="cancelCreate()" class="flex-1 bg-gray-800 px-3 py-2 rounded">Cancel</button>
           </div>
         </div>
@@ -343,7 +355,7 @@
             const letter = (primaryCat || '').slice(0,1).toUpperCase() || (kind==='need'?'N':'O');
             return this.shapeSvg(kind, color, letter);
           },
-          sampleMarker(kind, cat){ return this.markerHtml(kind, [cat], 2); },
+          sampleMarker(kind, cat, urg=2){ return this.markerHtml(kind, [cat], urg); },
           setRole(r) {
             this.role = r; localStorage.setItem('rl_role', r);
             // auto-focus layers by role
@@ -756,6 +768,18 @@
           },
           canSubmitPin() {
             return this.newPin.categories.length>0 && this.newPin.body.trim().length>0 && this.newPin.lat && this.newPin.lng;
+          },
+          postBtnLabel(){
+            if (!this.newPin.categories.length) return 'Pick a category';
+            if (!(this.newPin.lat&&this.newPin.lng)) return 'Place pin on map';
+            if (!this.newPin.body.trim().length) return 'Add details';
+            return 'Post';
+          },
+          primaryCreateAction(){
+            if (!this.newPin.categories.length) return; // highlight categories area implicitly
+            if (!(this.newPin.lat&&this.newPin.lng)) { this.ui.picking=true; return; }
+            if (!this.newPin.body.trim().length) return; // keep focus in details box
+            this.submitCreate();
           },
           useMyLocation() {
             if (!navigator.geolocation) { this.toast('Geolocation not available'); return; }
