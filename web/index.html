@@ -74,15 +74,32 @@
       
       <div id="map"></div>
       <!-- Legend (top-right) with timestamps -->
-      <div x-show="!ui.picking && !ui.leftOpen && !ui.rightOpen && !ui.chatOpen" class="absolute right-3 top-3 z-[600] bg-gray-900/95 border border-gray-800 rounded-lg p-3 text-[11px] shadow-xl legend">
-        <div class="font-semibold text-gray-200">Legend</div>
-        <div class="mt-2 grid grid-cols-[auto,1fr] gap-x-2 gap-y-2 items-center">
-          <span x-html="sampleMarker('need','Food',1)"></span><span class="text-gray-300">Need · Low (yellow)</span>
-          <span x-html="sampleMarker('need','Food',2)"></span><span class="text-gray-300">Need · Medium (orange)</span>
-          <span x-html="sampleMarker('need','Food',3)"></span><span class="text-gray-300">Need · High (red)</span>
-          <span x-html="sampleMarker('offer','Meals',2)"></span><span class="text-gray-300">Offer (green)</span>
+      <div x-show="!ui.picking && !ui.leftOpen && !ui.rightOpen && !ui.chatOpen" class="absolute right-3 top-3 z-[600] bg-gray-900/95 border border-gray-800 rounded-xl p-3.5 text-[12px] shadow-xl legend">
+        <div class="font-semibold text-gray-200 tracking-wide">Legend</div>
+        <div class="mt-2 space-y-2">
+          <div class="flex items-center gap-2">
+            <span x-html="sampleMarker('need','Food',2)"></span>
+            <span class="text-gray-300">Need help</span>
+            <div class="ml-2 flex items-center gap-2 text-[10px]">
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#facc15"></span><span class="text-gray-400">Low</span></span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#f59e0b"></span><span class="text-gray-400">Med</span></span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#ef4444"></span><span class="text-gray-400">High</span></span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span x-html="sampleMarker('offer','Meals',2)"></span>
+            <span class="text-gray-300">Offer</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span x-html="legendShelterIcon()"></span>
+            <span class="text-gray-300">Shelter</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span x-html="legendFoodIcon()"></span>
+            <span class="text-gray-300">Food/Supply site</span>
+          </div>
         </div>
-        <div class="mt-2 grid gap-1 text-[10px] text-gray-400">
+        <div class="mt-2.5 pt-2 border-t border-gray-800 grid gap-1 text-[10px] text-gray-400">
           <template x-if="statusShelters"><div x-text="statusShelters"></div></template>
           <template x-if="statusFood"><div x-text="statusFood"></div></template>
           <template x-if="status311"><div x-text="status311"></div></template>
@@ -356,6 +373,12 @@
             return this.shapeSvg(kind, color, letter);
           },
           sampleMarker(kind, cat, urg=2){ return this.markerHtml(kind, [cat], urg); },
+          legendShelterIcon(){
+            return `<div style="width:20px;height:20px;border-radius:9999px;background:#0b0f19;border:1px solid #1f2937;display:grid;place-items:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="#ffffff"><path d="M3 12l9-7 9 7v9h-6v-5H9v5H3z"/></svg></div>`;
+          },
+          legendFoodIcon(){
+            return `<div style=\"width:20px;height:20px;border-radius:9999px;background:#0b0f19;border:1px solid #1f2937;display:grid;place-items:center\"><svg width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"#ffffff\"><path d=\"M9 3h2v7a1 1 0 0 0 2 0V3h2v7a3 3 0 0 1-6 0V3zM11 14h2v7h-2z\"/></svg></div>`;
+          },
           setRole(r) {
             this.role = r; localStorage.setItem('rl_role', r);
             // auto-focus layers by role

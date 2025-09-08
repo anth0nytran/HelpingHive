@@ -27,7 +27,7 @@ def _read_json(path: Path):
 _cache: Dict[str, Any] = {"s": None, "s_ts": 0, "f": None, "f_ts": 0}
 
 async def _fetch_json(url: str) -> Any:
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         r = await client.get(url)
         r.raise_for_status()
         return r.json()
@@ -204,11 +204,17 @@ def _read_pantries_csv() -> List[Dict[str, Any]]:
 
 
 @router.get("/shelters")
-async def list_shelters():
+async def list_shelters(nocache: bool = False):
     remote_url = os.getenv("SHELTERS_URL")
     results: List[Dict[str, Any]] = []
     now = int(time.time())
+    if nocache:
+        _cache["s"], _cache["s_ts"] = None, 0
     if remote_url:
+        # Support overriding via SHELTERS_LAYER (0/1/2) appended to FeatureServer URL
+        layer_idx = os.getenv("SHELTERS_LAYER")
+        if layer_idx and "/FeatureServer" in remote_url and remote_url.rstrip("/").endswith("FeatureServer"):
+            remote_url = remote_url.rstrip("/") + f"/{layer_idx}"
         if not _cache["s"] or now - _cache["s_ts"] > 300:
             try:
                 # Prefer ArcGIS FeatureServer layer URLs (not direct /query URLs)
@@ -231,8 +237,42 @@ async def list_shelters():
                     _cache["s_ts"] = now
                 else:
                     # Accept direct ArcGIS /query URLs or plain JSON
-                    data = await _fetch_json(remote_url)
-                    points = _arcgis_to_points(data)
+                    points: List[Dict[str, Any]] = []
+                    # If the URL is a layer /query URL, prefer robust layer query
+                    if ("FeatureServer" in remote_url) and ("/query" in remote_url):
+                        try:
+                            layer_url = remote_url.split("/query")[0]
+                            feats = await _arcgis_query_features(layer_url)
+                            for feat in feats:
+                                try:
+                                    geom = feat.get("geometry") or {}
+                                    props = feat.get("properties") or {}
+                                    if geom.get("type") == "Point":
+                                        lng, lat = geom.get("coordinates") or [None, None]
+                                        if lat is None or lng is None:
+                                            continue
+                                        points.append({"lat": float(lat), "lng": float(lng), "attrs": props})
+                                except Exception:
+                                    continue
+                        except Exception:
+                            pass
+                    if not points:
+                        data = await _fetch_json(remote_url)
+                        # If the response is GeoJSON, convert accordingly
+                        if isinstance(data, dict) and data.get("type") == "FeatureCollection" and isinstance(data.get("features"), list):
+                            for feat in data.get("features") or []:
+                                try:
+                                    geom = feat.get("geometry") or {}
+                                    props = feat.get("properties") or {}
+                                    if geom.get("type") == "Point":
+                                        coords = geom.get("coordinates") or []
+                                        if len(coords) >= 2:
+                                            lng, lat = coords[0], coords[1]
+                                            points.append({"lat": float(lat), "lng": float(lng), "attrs": props})
+                                except Exception:
+                                    continue
+                        else:
+                            points = _arcgis_to_points(data)
                     _cache["s"] = [_std_shelter(p) for p in points]
                     _cache["s_ts"] = now
             except Exception:
