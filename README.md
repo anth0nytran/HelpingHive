@@ -24,11 +24,15 @@ HelpingHive is a lightweight web app that connects people who need help with nei
 
 ### Screenshots
 <img width="1918" height="865" alt="Map UI" src="https://github.com/user-attachments/assets/f767c170-d4db-474a-bdea-a029f15037a0" />
+Map Layers UI
 <img width="375" height="337" alt="HelpingHive AI Agent" src="https://github.com/user-attachments/assets/3cfc394d-5dfa-45a0-8b89-64da770627f1" />
+HelpingHive AI Agent
 <img width="528" height="561" alt="Pin Posting" src="https://github.com/user-attachments/assets/ed3d8be7-002b-4a25-b25f-52661e8aa748" />
+Real Time Need Help / Offering Help Pin Posting
 <img width="609" height="380" alt="Pin Comments" src="https://github.com/user-attachments/assets/387a0ebc-791e-44e7-927a-d6310af4baa4" />
+Real Time Pin Updates
 <img width="1157" height="558" alt="Local Pins Area" src="https://github.com/user-attachments/assets/10ebc969-d2d7-44e8-9150-2696f10762a2" />
-
+Local Pin Visuals
 
 
 ### Features
