@@ -1,8 +1,6 @@
 ## HelpingHive
 
-Community crisis mapping for needs and offers in real‑time.
-
-— Minimal UI. Fast map. Server‑side proxies to external data to keep the client light.
+HelpingHive provides a real-time map for needs, offers, and resources while giving officials a live dashboard with verified data and insights for faster, smarter disaster response.
 
 ### Table of Contents
 - Overview
