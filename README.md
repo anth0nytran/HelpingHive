@@ -27,6 +27,7 @@ HelpingHive is a lightweight web app that connects people who need help with nei
 <img width="375" height="337" alt="HelpingHive AI Agent" src="https://github.com/user-attachments/assets/3cfc394d-5dfa-45a0-8b89-64da770627f1" />
 <img width="528" height="561" alt="Pin Posting" src="https://github.com/user-attachments/assets/ed3d8be7-002b-4a25-b25f-52661e8aa748" />
 <img width="609" height="380" alt="Pin Comments" src="https://github.com/user-attachments/assets/387a0ebc-791e-44e7-927a-d6310af4baa4" />
+<img width="1157" height="558" alt="Local Pins Area" src="https://github.com/user-attachments/assets/10ebc969-d2d7-44e8-9150-2696f10762a2" />
 
 
 
