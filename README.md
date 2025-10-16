@@ -18,7 +18,7 @@ HelpingHive provides a real-time map for needs, offers, and resources while givi
 ### Overview
 HelpingHive is a lightweight web app that connects people who need help with neighbors who can offer help. It highlights official resources (shelters, food/supply) alongside community pins.
 
-### Try it out here: [https://helpinghive.up.railway.app/](https://helpinghive-1.onrender.com)
+### Try it out here: https://helpinghive-1.onrender.com
 
 ### Screenshots
 <div align="center">
